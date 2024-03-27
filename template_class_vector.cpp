@@ -10,6 +10,7 @@
 #include "stb_image.h"
 
 # define PI 3.14
+# define epsilon 0.1
 
 class Vector {
 public:
@@ -72,8 +73,9 @@ public:
 	const Vector C;
 	double R;
 	Vector albedo;
+	bool mirror;
 	// Constructor
-	Sphere(const Vector &C, double R, const Vector &albedo): C(C), R(R), albedo(albedo) {};
+	Sphere(const Vector &C, double R, const Vector &albedo, bool mirror): C(C), R(R), albedo(albedo), mirror(mirror) {};
 	
 	// Functions
 	double intersect(const Ray& r, Vector &P, Vector &N){
@@ -90,60 +92,128 @@ public:
 		}
 		// Intersection happened
 		P = r.O + t1*r.u;
-
 		N = P - C;
 		N.normalize();
 
 		return t1;
-	}
-
-	void getColor(double I, Vector &L, Vector &P, Vector &N, Vector &Color){
-		Color = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
 	}
 };
 
 class Scene{
 public:
 	std::vector<Sphere> objects;
+	double I;
+	Vector L;
+
+	Scene(double intensity, Vector &light): objects() {};
+	
 	void addSphere(Sphere s){
 		objects.push_back(s);
 	}
-	// intersect function with same prototype, go through all the objects and check if there is an intersection with a ray.
-	// make other intersect return t. find best intersection (smallest)
-	bool intersect(const Ray& r, Vector &P, Vector &N){
+	
+	int intersect(const Ray& r, Vector &P, Vector &N){
+		// intersect function with same prototype, go through all the objects and check if there is an intersection with a ray.
+		// make other intersect return t. find best intersection (smallest)
 		double bestt = 1e10;
-		for (int i = 0; i < objects.size(); i++){
-			objects[i].intersect(r);
+		int bestind = -1;
+
+		for (int i = 0; i < (int)sizeof(objects); i++){
+			double tmp;
+			tmp = objects[i].intersect(r, P, N);
+			if (tmp == -1) continue;
+			
+			if (tmp <= bestt){
+				bestt = tmp;
+				bestind = i;
+			}
 		}
+		objects[bestind].intersect(r, P, N);
+		return bestind;
+	}
+
+	bool check_shadow(Vector &P, Vector &N, Vector &L){
+		Vector angle = L - P;
+		angle.normalize();
+		Ray r = Ray(P + N*epsilon, angle);
+		Vector P_prime;
+		Vector N_prime;
+
+		if (intersect(r, P_prime, N_prime) == -1){
+			return false;
+		}
+		if ((P_prime - P).norm2() <= (L - P).norm2()){
+			return true;
+		}
+		return false;
+	}
+
+	// void getColor(int bestind, double I, Vector &L, Vector &P, Vector &N, Vector &Color){
+	// 	Vector albedo = objects[bestind].albedo;
+	// 	albedo.normalize();
+	// 	Color = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
+	// }
+
+	Vector getColor(const Ray& ray, int ray_depth){
+		if (ray_depth < 0) return Vector(0, 0, 0);
+
+		Vector P;
+		Vector N;
+		int sphere_id = intersect(ray, P, N);
+		if (sphere_id != -1){
+			if (objects[sphere_id].mirror) {
+				Vector reflected_angle = ray.u - 2*dot(ray.u, N)*N;
+				reflected_angle.normalize();
+				Ray reflected_ray = Ray(P + N*epsilon, reflected_angle);
+				return getColor(reflected_ray, ray_depth - 1);
+			} else {
+				Vector albedo = objects[sphere_id].albedo;
+				albedo.normalize();
+				return I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
+			}
+		}
+		return Vector(0, 0, 0);
 	}
 };
 
 int main() {
 	printf("main function\n");
-	int W = 512;
-	int H = 512;
+	int W = 512; // width
+	int H = 512; // height
+
 	double fov=60*M_PI/180; // 60 degrees
-	Sphere S(Vector(0, 0, 0), 10.0, Vector(0, 1, 0)); // sphere
+
 	Vector C(0, 0, 55); // camera
-	Vector L(-10,20,40);
-	double I = 2e10;
+	Vector L(-10,20,40); // light
+	double I = 2e10; // intensity
+
+	Scene s = Scene(I, L);
+
+	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+
+	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
+	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
+	Sphere S_left(Vector(0, 0, -1000), 940.0, Vector(5, 102, 8), false); // sphere
+	Sphere S_right(Vector(0, 0, 1000), 940.0, Vector(255, 20, 147), false); // sphere
+
+	s.addSphere(S);
+	s.addSphere(S_up);
+	s.addSphere(S_down);
+	s.addSphere(S_left);
+	s.addSphere(S_right);
 
 	std::vector<unsigned char> image(W * H * 3, 0);
 	for (int i = 0; i < H; i++) {
 		for (int j = 0; j < W; j++) {
-			
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			Vector u(j-W/2+0.5, H/2-i-0.5, z);
 			u.normalize();
 			Ray r(C, u);
 			Vector P;
 			Vector N;
-			bool inter = S.intersect(r, P, N);
+			
 			Vector color(0,0,0);
-
-			if (inter) {
-				S.getColor(I, L, P, N, color);
-			}
+			int inter = s.intersect(r, P, N);
+			if (inter != -1 && !s.check_shadow(P, N, L)) s.getColor(inter, I, L, P, N, color);
 
 			image[(i * W + j) * 3 + 0] = std::min(std::pow(color[0], 0.454545), 255.0); // gamma correction and capping
 			image[(i * W + j) * 3 + 1] = std::min(std::pow(color[1], 0.454545), 255.0); // gamma correction and capping
