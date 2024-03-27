@@ -105,7 +105,7 @@ public:
 	double I;
 	Vector L;
 
-	Scene(double intensity, Vector &light): objects() {};
+	Scene(double intensity, Vector &light): objects(), I(intensity), L(light) {};
 	
 	void addSphere(Sphere s){
 		objects.push_back(s);
@@ -153,6 +153,10 @@ public:
 	// 	Color = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
 	// }
 
+	// void print(Vector &v){
+	// 				printf("%f, %f, %f\n", v[0], v[1], v[2]);
+	// 			}
+
 	Vector getColor(const Ray& ray, int ray_depth){
 		if (ray_depth < 0) return Vector(0, 0, 0);
 
@@ -188,7 +192,8 @@ int main() {
 
 	Scene s = Scene(I, L);
 
-	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
+	Sphere S_more(Vector(-25, 0, 5), 10.0, Vector(1, 1, 1), false); // sphere
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
 	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
@@ -196,6 +201,7 @@ int main() {
 	Sphere S_right(Vector(0, 0, 1000), 940.0, Vector(255, 20, 147), false); // sphere
 
 	s.addSphere(S);
+	s.addSphere(S_more);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
 	s.addSphere(S_left);
@@ -213,7 +219,7 @@ int main() {
 			
 			Vector color(0,0,0);
 			int inter = s.intersect(r, P, N);
-			if (inter != -1 && !s.check_shadow(P, N, L)) s.getColor(inter, I, L, P, N, color);
+			if (inter != -1 && !s.check_shadow(P, N, L)) color = s.getColor(r, 3);
 
 			image[(i * W + j) * 3 + 0] = std::min(std::pow(color[0], 0.454545), 255.0); // gamma correction and capping
 			image[(i * W + j) * 3 + 1] = std::min(std::pow(color[1], 0.454545), 255.0); // gamma correction and capping
