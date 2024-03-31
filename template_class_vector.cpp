@@ -147,16 +147,6 @@ public:
 		return false;
 	}
 
-	// void getColor(int bestind, double I, Vector &L, Vector &P, Vector &N, Vector &Color){
-	// 	Vector albedo = objects[bestind].albedo;
-	// 	albedo.normalize();
-	// 	Color = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
-	// }
-
-	// void print(Vector &v){
-	// 				printf("%f, %f, %f\n", v[0], v[1], v[2]);
-	// 			}
-
 	Vector getColor(const Ray& ray, int ray_depth){
 		if (ray_depth < 0) return Vector(0, 0, 0);
 
@@ -169,7 +159,8 @@ public:
 				reflected_angle.normalize();
 				Ray reflected_ray = Ray(P + N*epsilon, reflected_angle);
 				return getColor(reflected_ray, ray_depth - 1);
-			} else {
+			} else 
+			{
 				Vector albedo = objects[sphere_id].albedo;
 				albedo.normalize();
 				return I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
@@ -194,18 +185,24 @@ int main() {
 
 	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
 	Sphere S_more(Vector(-25, 0, 5), 10.0, Vector(1, 1, 1), false); // sphere
+	Sphere S_3(Vector(25, 0, -5), 10.0, Vector(1, 1, 1), true); // sphere
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
 	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
 	Sphere S_left(Vector(0, 0, -1000), 940.0, Vector(5, 102, 8), false); // sphere
 	Sphere S_right(Vector(0, 0, 1000), 940.0, Vector(255, 20, 147), false); // sphere
+	Sphere S_side1(Vector(-1000, 0, 0), 940.0, Vector(255, 255, 0), false); // sphere
+	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255), false); // sphere
 
 	s.addSphere(S);
 	s.addSphere(S_more);
+	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
 	s.addSphere(S_left);
 	s.addSphere(S_right);
+	s.addSphere(S_side1);
+	s.addSphere(S_side2);
 
 	std::vector<unsigned char> image(W * H * 3, 0);
 	for (int i = 0; i < H; i++) {
