@@ -74,8 +74,9 @@ public:
 	double R;
 	Vector albedo;
 	bool mirror;
+	double refindex;
 	// Constructor
-	Sphere(const Vector &C, double R, const Vector &albedo, bool mirror): C(C), R(R), albedo(albedo), mirror(mirror) {};
+	Sphere(const Vector &C, double R, const Vector &albedo, bool mirror): C(C), R(R), albedo(albedo), mirror(mirror), refindex(0) {};
 	
 	// Functions
 	double intersect(const Ray& r, Vector &P, Vector &N){
@@ -152,20 +153,56 @@ public:
 
 		Vector P;
 		Vector N;
+		
+		//printf("before intersect\n");
 		int sphere_id = intersect(ray, P, N);
+		//printf("can intersect\n");
+		
 		if (sphere_id != -1){
-			if (objects[sphere_id].mirror) {
+			if (objects[sphere_id].mirror) { // reflection
 				Vector reflected_angle = ray.u - 2*dot(ray.u, N)*N;
 				reflected_angle.normalize();
 				Ray reflected_ray = Ray(P + N*epsilon, reflected_angle);
 				return getColor(reflected_ray, ray_depth - 1);
-			} else 
+			} 
+			else if (objects[sphere_id].refindex != 0) // refraction
+			{
+				double n2;
+				Vector N_saved = N;
+
+				n2 = objects[sphere_id].refindex;
+				
+				if (dot(ray.u, N) >= 0){
+					N = Vector(0,0,0) - N;
+					n2 = 1/n2;
+				}
+
+				if (1-(1/(n2*n2))*(1-dot(ray.u, N)*dot(ray.u, N)) < 0){
+					// same as reflection
+					N = N_saved;
+					Vector reflected_angle = ray.u - 2*dot(ray.u, N)*N;
+					reflected_angle.normalize();
+					Ray reflected_ray = Ray(P + N*epsilon, reflected_angle);
+
+					return getColor(reflected_ray, ray_depth - 1);
+				}
+
+				double tN = -sqrt(1-(1/(n2*n2))*(1-dot(ray.u, N)*dot(ray.u, N)));
+				Vector tTT = 1/n2*(ray.u-dot(ray.u, N)*N);
+				
+				Vector t = tN*N + tTT;
+				
+				Ray refracted_ray = Ray(P - N*epsilon, t);
+				return getColor(refracted_ray, ray_depth);
+			}
+			else 
 			{
 				Vector albedo = objects[sphere_id].albedo;
 				albedo.normalize();
 				return I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
 			}
 		}
+		// printf("got to zero...\n");
 		return Vector(0, 0, 0);
 	}
 };
@@ -183,9 +220,10 @@ int main() {
 
 	Scene s = Scene(I, L);
 
-	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
+	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
 	Sphere S_more(Vector(-25, 0, 5), 10.0, Vector(1, 1, 1), false); // sphere
 	Sphere S_3(Vector(25, 0, -5), 10.0, Vector(1, 1, 1), true); // sphere
+	S.refindex = 1.5; // refraction index for glass
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
 	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
@@ -195,7 +233,7 @@ int main() {
 	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255), false); // sphere
 
 	s.addSphere(S);
-	s.addSphere(S_more);
+	//s.addSphere(S_more);
 	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
@@ -216,7 +254,7 @@ int main() {
 			
 			Vector color(0,0,0);
 			int inter = s.intersect(r, P, N);
-			if (inter != -1 && !s.check_shadow(P, N, L)) color = s.getColor(r, 3);
+			if (inter != -1 && !s.check_shadow(P, N, L)) color = s.getColor(r, 5);
 
 			image[(i * W + j) * 3 + 0] = std::min(std::pow(color[0], 0.454545), 255.0); // gamma correction and capping
 			image[(i * W + j) * 3 + 1] = std::min(std::pow(color[1], 0.454545), 255.0); // gamma correction and capping
