@@ -1,4 +1,8 @@
 #include <algorithm>
+#include <random>
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <vector>
@@ -177,7 +181,21 @@ public:
 					n2 = 1/n2;
 				}
 
-				if (1-(1/(n2*n2))*(1-dot(ray.u, N)*dot(ray.u, N)) < 0){
+				/* Fresnel */
+				// Calculate how much refracted and how much reflected
+				double k0 = ((1-n2)*(1-n2))/((1+n2)*(1+n2));
+				double R = k0 + (1-k0)*pow((1-abs(dot(N, ray.u))), 5);
+
+				std::random_device rd;
+				std::mt19937 gen(rd());
+				std::uniform_real_distribution<> dis(0.0, 1.0);
+				double random_num = dis(gen);
+
+				bool reflect = false;
+				if (random_num < R) reflect = true;
+				/*Done Frensnel*/
+
+				if (reflect || 1-(1/(n2*n2))*(1-dot(ray.u, N)*dot(ray.u, N)) < 0){
 					// same as reflection
 					N = N_saved;
 					Vector reflected_angle = ray.u - 2*dot(ray.u, N)*N;
@@ -220,10 +238,11 @@ int main() {
 
 	Scene s = Scene(I, L);
 
-	Sphere S(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
-	Sphere S_more(Vector(-25, 0, 5), 10.0, Vector(1, 1, 1), false); // sphere
-	Sphere S_3(Vector(25, 0, -5), 10.0, Vector(1, 1, 1), true); // sphere
+	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+	Sphere S_more(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+	Sphere S_3(Vector(-20, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
 	S.refindex = 1.5; // refraction index for glass
+	S_more.refindex = 1.5;
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
 	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
@@ -233,7 +252,7 @@ int main() {
 	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255), false); // sphere
 
 	s.addSphere(S);
-	//s.addSphere(S_more);
+	s.addSphere(S_more);
 	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
@@ -254,7 +273,13 @@ int main() {
 			
 			Vector color(0,0,0);
 			int inter = s.intersect(r, P, N);
-			if (inter != -1 && !s.check_shadow(P, N, L)) color = s.getColor(r, 5);
+			if (inter != -1 && !s.check_shadow(P, N, L)){
+				int K = 20;
+				for (int i=0; i<K; i++){
+					color = color + s.getColor(r, 5);
+				}
+				color = color / K;
+			}
 
 			image[(i * W + j) * 3 + 0] = std::min(std::pow(color[0], 0.454545), 255.0); // gamma correction and capping
 			image[(i * W + j) * 3 + 1] = std::min(std::pow(color[1], 0.454545), 255.0); // gamma correction and capping
