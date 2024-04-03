@@ -302,11 +302,18 @@ int main() {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			
 			Vector color(0,0,0);
-			int K = 5;
+			int K = 100;
+
+			std::random_device ran_dev;
+			std::mt19937 gen(ran_dev());
+			std::uniform_real_distribution<> unif_dis(0.0, 1.0);
 
 			for (int _i=0; _i<K; _i++){
+
+				double r1 = unif_dis(gen);
+				double r2 = unif_dis(gen);
 				
-				Vector u(j-W/2+0.5, H/2-i-0.5, z);
+				Vector u(j-W/2+0.5 + 0.4*sqrt(-2*log(r1))*cos(2*PI*r2), H/2-i-0.5 + 0.4*sqrt(-2*log(r1))*sin(2*PI*r2), z);
 				u.normalize();
 				Ray r(C, u);
 
