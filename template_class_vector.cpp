@@ -158,9 +158,7 @@ public:
 		Vector P;
 		Vector N;
 		
-		//printf("before intersect\n");
 		int sphere_id = intersect(ray, P, N);
-		//printf("can intersect\n");
 		
 		if (sphere_id != -1){
 			if (objects[sphere_id].mirror) { // reflection
@@ -220,7 +218,6 @@ public:
 				return I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
 			}
 		}
-		// printf("got to zero...\n");
 		return Vector(0, 0, 0);
 	}
 };
@@ -239,10 +236,12 @@ int main() {
 	Scene s = Scene(I, L);
 
 	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+	// Sphere S_inside(Vector(20, 0, 0), 9.0, Vector(1, 1, 1), false); // sphere
 	Sphere S_more(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
 	Sphere S_3(Vector(-20, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
-	S.refindex = 1.5; // refraction index for glass
-	S_more.refindex = 1.5;
+	// S.refindex = 1.5; // refraction index for glass
+	// S_inside.refindex = 1/1.5;
+	// S_more.refindex = 1.5;
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
 	Sphere S_down(Vector(0, -1000, 0), 990.0, Vector(0, 0, 1), false); // sphere
@@ -253,6 +252,7 @@ int main() {
 
 	s.addSphere(S);
 	s.addSphere(S_more);
+	// s.addSphere(S_inside);
 	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
@@ -274,7 +274,7 @@ int main() {
 			Vector color(0,0,0);
 			int inter = s.intersect(r, P, N);
 			if (inter != -1 && !s.check_shadow(P, N, L)){
-				int K = 20;
+				int K = 5;
 				for (int i=0; i<K; i++){
 					color = color + s.getColor(r, 5);
 				}
