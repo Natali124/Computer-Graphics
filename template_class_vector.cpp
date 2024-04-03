@@ -152,6 +152,31 @@ public:
 		return false;
 	}
 
+	Vector randomDirection(Vector &N){
+		std::random_device ran_dev;
+		std::mt19937 gen(ran_dev());
+		std::uniform_real_distribution<> unif_dis(0.0, 1.0);
+		double r1 = unif_dis(gen);
+		double r2 = unif_dis(gen);
+		
+		double x = cos(2*PI*r1)*sqrt(1-r2);
+		double y = sin(2*PI*r1)*sqrt(1-r2);
+		double z = sqrt(r2);
+
+		Vector T1;
+
+		if (N[0] <= N[1] && N[0] <= N[2]){
+			T1 = Vector(0, -N[2], N[1]);
+		} else if (N[1] <= N[0] && N[1] <= N[2]){
+			T1 = Vector(-N[2], 0, N[0]);
+		} else {
+			T1 = Vector(-N[1], N[0], 0);
+		}
+		T1.normalize();
+		Vector T2 = cross(N, T1);
+		return x*T1 + y*T2 + z*N;
+	}
+
 	Vector getColor(const Ray& ray, int ray_depth){
 		if (ray_depth < 0) return Vector(0, 0, 0);
 
@@ -215,7 +240,16 @@ public:
 			{
 				Vector albedo = objects[sphere_id].albedo;
 				albedo.normalize();
-				return I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
+				Vector direct_light = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
+				if (check_shadow(P, N, L)){
+					direct_light = Vector(0,0,0);
+				}
+				Vector w = randomDirection(N);
+				Ray indirect_ray = Ray(P + N*epsilon, w);
+				Vector radiance = getColor(indirect_ray, ray_depth - 1);
+				Vector indirect_light = Vector(albedo[0] * radiance[0], albedo[1] * radiance[1], albedo[2] * radiance[2]);
+
+				return direct_light + indirect_light;
 			}
 		}
 		return Vector(0, 0, 0);
@@ -235,12 +269,12 @@ int main() {
 
 	Scene s = Scene(I, L);
 
-	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
-	// Sphere S_inside(Vector(20, 0, 0), 9.0, Vector(1, 1, 1), false); // sphere
-	Sphere S_more(Vector(0, 0, 0), 10.0, Vector(1, 1, 1), false); // sphere
+	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 0, 1), false); // sphere
+	Sphere S_inside(Vector(20, 0, 0), 9.0, Vector(1, 1, 1), false); // sphere
+	Sphere S_more(Vector(0, 0, 0), 10.0, Vector(1, 1, 0), false); // sphere
 	Sphere S_3(Vector(-20, 0, 0), 10.0, Vector(1, 1, 1), true); // sphere
-	// S.refindex = 1.5; // refraction index for glass
-	// S_inside.refindex = 1/1.5;
+	S.refindex = 1.5; // refraction index for glass
+	S_inside.refindex = 1/1.5;
 	// S_more.refindex = 1.5;
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0), false); // sphere
@@ -252,7 +286,7 @@ int main() {
 
 	s.addSphere(S);
 	s.addSphere(S_more);
-	// s.addSphere(S_inside);
+	s.addSphere(S_inside);
 	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
@@ -262,7 +296,9 @@ int main() {
 	s.addSphere(S_side2);
 
 	std::vector<unsigned char> image(W * H * 3, 0);
+#pragma omp parallel for
 	for (int i = 0; i < H; i++) {
+#pragma omp parallel for
 		for (int j = 0; j < W; j++) {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			Vector u(j-W/2+0.5, H/2-i-0.5, z);
@@ -273,8 +309,8 @@ int main() {
 			
 			Vector color(0,0,0);
 			int inter = s.intersect(r, P, N);
-			if (inter != -1 && !s.check_shadow(P, N, L)){
-				int K = 5;
+			if (inter != -1){
+				int K = 20;
 				for (int i=0; i<K; i++){
 					color = color + s.getColor(r, 5);
 				}

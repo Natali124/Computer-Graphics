@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -Wall
+CXXFLAGS := -Wall -fopenmp
 INCLUDES := -I.
 
 SRCS := template_class_vector.cpp
