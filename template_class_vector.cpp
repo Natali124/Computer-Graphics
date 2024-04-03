@@ -296,26 +296,23 @@ int main() {
 	s.addSphere(S_side2);
 
 	std::vector<unsigned char> image(W * H * 3, 0);
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 1)
 	for (int i = 0; i < H; i++) {
-#pragma omp parallel for
 		for (int j = 0; j < W; j++) {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
-			Vector u(j-W/2+0.5, H/2-i-0.5, z);
-			u.normalize();
-			Ray r(C, u);
-			Vector P;
-			Vector N;
 			
 			Vector color(0,0,0);
-			int inter = s.intersect(r, P, N);
-			if (inter != -1){
-				int K = 20;
-				for (int i=0; i<K; i++){
-					color = color + s.getColor(r, 5);
-				}
-				color = color / K;
+			int K = 5;
+
+			for (int _i=0; _i<K; _i++){
+				
+				Vector u(j-W/2+0.5, H/2-i-0.5, z);
+				u.normalize();
+				Ray r(C, u);
+
+				color = color + s.getColor(r, 5);
 			}
+			color = color / K;
 
 			image[(i * W + j) * 3 + 0] = std::min(std::pow(color[0], 0.454545), 255.0); // gamma correction and capping
 			image[(i * W + j) * 3 + 1] = std::min(std::pow(color[1], 0.454545), 255.0); // gamma correction and capping
