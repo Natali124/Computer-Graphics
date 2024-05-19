@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <stdio.h>
+#include <list>
 
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <vector>
@@ -95,7 +96,7 @@ public:
 		Bmax = Vector(std::max(point[0], Bmax[0]), std::max(point[1], Bmax[1]), std::max(point[2], Bmax[2]));
 	}
 
-	bool intersect(const Ray& r) {
+	bool intersect(const Ray& r, double& t) {
 		// x plane intersections
 		double tx0 = (Bmin[0] - r.O[0]) / r.u[0];
 		double tx1 = (Bmax[0] - r.O[0]) / r.u[0];
@@ -115,6 +116,7 @@ public:
 		double t_total_entry = std::max(tx_entry, std::max(ty_entry, tz_entry));
 		double t_total_exit = std::min(tx_exit, std::min(ty_exit, tz_exit));
 
+		t = t_total_entry;
 		return (t_total_entry > 0 && t_total_entry < t_total_exit);
 	}
 };
@@ -129,20 +131,37 @@ public:
     int group;       // face group
 };
 
+class BVH {
+public:
+	int start;
+	int end;
+	BVH* left;
+	BVH* right;
+	BoundingBox bbox;
+
+	BVH() : bbox(), start(0), end(0), left(nullptr), right(nullptr) {};
+};
+
 class TriangleMesh : public Geometry {
 public:
+	BVH bvh;
 
-	BoundingBox boundingBox;
   ~TriangleMesh() {}
 
-    TriangleMesh() : boundingBox() {};
+    TriangleMesh() : bvh() {};
 
-	void computeBoundingBox(BoundingBox& box) {
+	void computeBoundingBox(BoundingBox& box, int triStart, int triEnd) {
 		box.Bmin = Vector(1e10, 1e10, 1e10);
 		box.Bmax = Vector(-1e10, -1e10, -1e10);
 
-		for (auto vertex: vertices) {
-			box.extendBox(vertex);
+		for (int i = triStart; i< triEnd; i++) {
+			auto index = indices[i];
+			auto pointA = vertices[index.vtxi];
+			auto pointB = vertices[index.vtxi];
+			auto pointC = vertices[index.vtxi];
+			box.extendBox(pointA);
+			box.extendBox(pointB);
+			box.extendBox(pointC);
 		}
 	}
     
@@ -318,8 +337,8 @@ public:
         }
         fclose(f);
 
-		computeBoundingBox(boundingBox);
- 
+		// computeBoundingBox(boundingBox, 0, 0);
+		buildBVH(&bvh, 0, indices.size());
     }
  
     std::vector<TriangleIndices> indices;
@@ -327,6 +346,57 @@ public:
     std::vector<Vector> normals;
     std::vector<Vector> uvs;
     std::vector<Vector> vertexcolors;
+
+	void buildBVH(BVH *curNode, int starting_triangle, int ending_triangle){
+		curNode->start = starting_triangle;
+		curNode->end = ending_triangle;
+		curNode->left = nullptr;
+		curNode->right = nullptr;
+		computeBoundingBox(curNode->bbox, starting_triangle, ending_triangle);
+
+		if (ending_triangle - starting_triangle <= 4) {
+            return;
+        }
+
+		Vector diag = curNode->bbox.Bmax - curNode->bbox.Bmin;
+		int longestAxis;
+		if (diag[0] >= diag[1] && diag[0] >= diag[2]) {
+			longestAxis = 0;
+		} else if (diag[1] >= diag[0] && diag[1] >= diag[2]) {
+			longestAxis = 1;
+		} else {
+			longestAxis = 2;
+		}
+		Vector middle_diag = curNode->bbox.Bmin + diag*0.5;
+
+		// Partition triangles based on their barycenter
+		int pivot_index = starting_triangle;
+		for (int i=starting_triangle; i<ending_triangle; i++){
+			auto index = indices[i];
+			Vector A = vertices[index.vtxi];
+			Vector B = vertices[index.vtxj];
+			Vector C = vertices[index.vtxk];
+			Vector barycenter = (A + B + C)/3.0;
+
+			if (barycenter[longestAxis] < middle_diag[longestAxis]) {
+				std::swap(indices[i], indices[pivot_index]);
+				pivot_index ++;
+			}
+		}
+
+		if (pivot_index <= starting_triangle || pivot_index >= ending_triangle - 1 || ending_triangle - starting_triangle<5){
+			// delete curNode->left;
+			// delete curNode->right;
+			// curNode->left = NULL;
+			// curNode->right = NULL;
+			return;
+		}
+
+		curNode->left = new BVH();
+		curNode->right = new BVH();
+		buildBVH(curNode->left, starting_triangle, pivot_index);
+		buildBVH(curNode->right, pivot_index, ending_triangle);
+	}
 	
 	void scale_and_translate(int factor, const Vector &coordinate){
 		for (auto index: indices){
@@ -399,30 +469,63 @@ public:
 		N.normalize();
 		albedo = Vector(1, 1, 1);
 		albedo.normalize();
+
+		//std::cout<<t_temp << std::endl;
 		
 		return t_temp;
 	}
 
 	virtual double intersect(const Ray& r, Vector &P, Vector &N, Vector &albedo){
-		double bestt = 1e10;
 		bool intersection = false;
+		double bestt = 1e10;
 		TriangleIndices best_index;
 
-		double t = boundingBox.intersect(r);
-		if (t == -1){
-			return -1;
-		}
+		// here goes BVH algorithm
+		double temp;
+		if (!bvh.bbox.intersect(r, temp)) return -1;
 
-		for (auto index: indices){
-			double tmp = intersectTriangle(r, index, P, N, albedo);
-			if (tmp == -1) continue;
-			
-			intersection = true;
-			if (tmp <= bestt){
-				bestt = tmp;
-				best_index = index;
+		std::list<BVH*> nodes_to_visit;
+		nodes_to_visit.push_front(&bvh);
+		
+		double best_inter_distance = std::numeric_limits<double>::max();
+		double inter_distance;
+
+		while(!nodes_to_visit.empty()){
+			BVH* curNode = nodes_to_visit.back();
+			nodes_to_visit.pop_back();
+			// if there is one child, then it is not a leaf so test the building box
+			if (curNode->left){
+				if (curNode->left->bbox.intersect(r, inter_distance)) {
+					if (inter_distance < best_inter_distance) {
+						nodes_to_visit.push_back(curNode->left);
+					}
+				}
+				if (curNode->right->bbox.intersect(r, inter_distance)) {
+					if(inter_distance < best_inter_distance){
+						nodes_to_visit.push_back(curNode->right);
+					}
+				}
+				else {
+					// test all triangles between curNode->starting triangle
+					// and curNode ending triangle as before.
+					// if an intersection is found, update best_inter_distance if needed
+					for (int i=curNode->start; i<curNode->end; i++){
+						double tmp = intersectTriangle(r, indices[i], P, N, albedo);
+						if (tmp == -1) continue;
+						intersection = true;
+						if (tmp <= best_inter_distance){
+							best_inter_distance = tmp;
+						}
+						if (tmp <= bestt){
+							bestt = tmp;
+							best_index = indices[i];
+						}
+					}
+
+				}
 			}
 		}
+
 		if (intersection){
 			double t = intersectTriangle(r, best_index, P, N, albedo);
 			return t;
