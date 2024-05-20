@@ -157,8 +157,8 @@ public:
 		for (int i = triStart; i< triEnd; i++) {
 			auto index = indices[i];
 			auto pointA = vertices[index.vtxi];
-			auto pointB = vertices[index.vtxi];
-			auto pointC = vertices[index.vtxi];
+			auto pointB = vertices[index.vtxj];
+			auto pointC = vertices[index.vtxk];
 			box.extendBox(pointA);
 			box.extendBox(pointB);
 			box.extendBox(pointC);
@@ -336,11 +336,6 @@ public:
  
         }
         fclose(f);
-
-		scale_and_translate(0.6, Vector(0, -10, 0));
-
-		// computeBoundingBox(boundingBox, 0, 0);
-		buildBVH(&bvh, 0, indices.size());
     }
  
     std::vector<TriangleIndices> indices;
@@ -352,16 +347,10 @@ public:
 	void buildBVH(BVH *curNode, int starting_triangle, int ending_triangle){
 		curNode->start = starting_triangle;
 		curNode->end = ending_triangle;
-		
 		computeBoundingBox(curNode->bbox, starting_triangle, ending_triangle);
-
-		if (ending_triangle - starting_triangle <= 4) {
-            return; // leaf node
-        }
 
 		Vector diag = curNode->bbox.Bmax - curNode->bbox.Bmin;
 		int longestAxis;
-		
 		if (diag[0] >= diag[1] && diag[0] >= diag[2]) {
 			longestAxis = 0;
 		} else if (diag[1] >= diag[0] && diag[1] >= diag[2]) {
@@ -369,20 +358,31 @@ public:
 		} else {
 			longestAxis = 2;
 		}
+		Vector middle_diag = curNode->bbox.Bmin + diag*0.5;
 
-		// Sort triangles based on their centroid along the longest axis
-    	std::sort(indices.begin() + starting_triangle, indices.begin() + ending_triangle,
-              [this, longestAxis](const TriangleIndices& a, const TriangleIndices& b) {
-        Vector centroidA = (vertices[a.vtxi] + vertices[a.vtxj] + vertices[a.vtxk]) * (1.0 / 3.0);
-        Vector centroidB = (vertices[b.vtxi] + vertices[b.vtxj] + vertices[b.vtxk]) * (1.0 / 3.0);
-        return centroidA[longestAxis] < centroidB[longestAxis];
-    	});
+		// Partition triangles based on their barycenter
+		int pivot_index = starting_triangle;
+		for (int i=starting_triangle; i<ending_triangle; i++){
+			auto index = indices[i];
+			Vector A = vertices[index.vtxi];
+			Vector B = vertices[index.vtxj];
+			Vector C = vertices[index.vtxk];
+			Vector barycenter = (A + B + C)/3.0;
+
+			if (barycenter[longestAxis] < middle_diag[longestAxis]) {
+				std::swap(indices[i], indices[pivot_index]);
+				pivot_index ++;
+			}
+		}
+
+		if (pivot_index <= starting_triangle || pivot_index >= ending_triangle - 1 || ending_triangle - starting_triangle<5){
+			return;
+		}
 
 		curNode->left = new BVH();
 		curNode->right = new BVH();
-
-		buildBVH(curNode->left, starting_triangle, (starting_triangle + ending_triangle) / 2);
-		buildBVH(curNode->right, (starting_triangle + ending_triangle) / 2, ending_triangle);
+		buildBVH(curNode->left, starting_triangle, pivot_index);
+		buildBVH(curNode->right, pivot_index, ending_triangle);
 	}
 	
 	void scale_and_translate(double factor, const Vector &translate){
@@ -694,6 +694,10 @@ int main() {
 	T.readOBJ("cat.obj");
 	std::cout<<"mesh loaded"<<std::endl;
 
+	T.scale_and_translate(0.6, Vector(0, -10, 0));
+	T.buildBVH(&(T.bvh), 0, T.indices.size());
+
+	s.objects.push_back(&T);
 
 	//s.objects.push_back(&T);
 	std::cout<<"mesh added to the objects"<<std::endl;
@@ -724,8 +728,6 @@ int main() {
 	s.addSphere(S_right);
 	s.addSphere(S_side1);
 	s.addSphere(S_side2);
-
-	s.objects.push_back(&T);
 
 	std::vector<unsigned char> image(W * H * 3, 0);
 #pragma omp parallel for schedule(dynamic, 1)
