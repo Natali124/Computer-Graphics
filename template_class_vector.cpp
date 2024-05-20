@@ -350,16 +350,16 @@ public:
 	void buildBVH(BVH *curNode, int starting_triangle, int ending_triangle){
 		curNode->start = starting_triangle;
 		curNode->end = ending_triangle;
-		curNode->left = nullptr;
-		curNode->right = nullptr;
+		
 		computeBoundingBox(curNode->bbox, starting_triangle, ending_triangle);
 
-		if (ending_triangle - starting_triangle <= 4) {
-            return;
+		if (ending_triangle - starting_triangle <= 200) {
+            return; // leaf node
         }
 
 		Vector diag = curNode->bbox.Bmax - curNode->bbox.Bmin;
 		int longestAxis;
+		
 		if (diag[0] >= diag[1] && diag[0] >= diag[2]) {
 			longestAxis = 0;
 		} else if (diag[1] >= diag[0] && diag[1] >= diag[2]) {
@@ -367,35 +367,21 @@ public:
 		} else {
 			longestAxis = 2;
 		}
-		Vector middle_diag = curNode->bbox.Bmin + diag*0.5;
 
-		// Partition triangles based on their barycenter
-		int pivot_index = starting_triangle;
-		for (int i=starting_triangle; i<ending_triangle; i++){
-			auto index = indices[i];
-			Vector A = vertices[index.vtxi];
-			Vector B = vertices[index.vtxj];
-			Vector C = vertices[index.vtxk];
-			Vector barycenter = (A + B + C)/3.0;
-
-			if (barycenter[longestAxis] < middle_diag[longestAxis]) {
-				std::swap(indices[i], indices[pivot_index]);
-				pivot_index ++;
-			}
-		}
-
-		if (pivot_index <= starting_triangle || pivot_index >= ending_triangle - 1 || ending_triangle - starting_triangle<5){
-			// delete curNode->left;
-			// delete curNode->right;
-			// curNode->left = NULL;
-			// curNode->right = NULL;
-			return;
-		}
+		// Sort triangles based on their centroid along the longest axis
+    	std::sort(indices.begin() + starting_triangle, indices.begin() + ending_triangle,
+              [this, longestAxis](const TriangleIndices& a, const TriangleIndices& b) {
+        Vector centroidA = (vertices[a.vtxi] + vertices[a.vtxj] + vertices[a.vtxk]) * (1.0 / 3.0);
+        Vector centroidB = (vertices[b.vtxi] + vertices[b.vtxj] + vertices[b.vtxk]) * (1.0 / 3.0);
+        return centroidA[longestAxis] < centroidB[longestAxis];
+    	});
 
 		curNode->left = new BVH();
 		curNode->right = new BVH();
-		buildBVH(curNode->left, starting_triangle, pivot_index);
-		buildBVH(curNode->right, pivot_index, ending_triangle);
+
+		std::cout << "new node" << std::endl;
+		buildBVH(curNode->left, starting_triangle, (starting_triangle + ending_triangle) / 2);
+		buildBVH(curNode->right, (starting_triangle + ending_triangle) / 2, ending_triangle);
 	}
 	
 	void scale_and_translate(int factor, const Vector &coordinate){
@@ -406,133 +392,78 @@ public:
 		}
 	}
 
-	// double intersectTriangle(const Ray& r, TriangleIndices& index, Vector &P, Vector &N, Vector &albedo){
+	double intersectTriangle(const Ray& r, TriangleIndices& index, Vector &P, Vector &N, Vector &albedo){
+		Vector A = vertices[index.vtxi];
+        Vector B = vertices[index.vtxj];
+        Vector C = vertices[index.vtxk];
 
-	// 	Vector A = vertices[index.vtxi];
-	// 	Vector B = vertices[index.vtxj];
-	// 	Vector C = vertices[index.vtxk];
-
-	// 	Vector e1 = B - A;
-	// 	Vector e2 = C - A;
-	// 	N = cross(e1, e2);
-
-	// 	// std::cout << N[0] << N[1] << N[2] << std:: endl;
-
-	// 	if (dot(r.u, N) == 0){
-	// 		return -1;
-	// 	}
-	// 	double t = dot(A-r.O, N)/dot(r.u, N);
-
-	// 	if (t < epsilon) return -1;
-
-	// 	double beta = dot(e2, cross((A-r.O), r.u))/dot(r.u, N);
-	// 	double gamma = -dot(e1, cross((A - r.O), r.u))/dot(r.u, N);
-	// 	double alpha = 1-beta-gamma;
-
-	// 	P = alpha*A + beta*B + gamma*C;
-	// 	N.normalize();
-	// 	if (dot(r.O-P, N) < 0){
-	// 	 	N = Vector(0,0,0) - N;
-	// 	}
-	// 	albedo = Vector(255,255,255); // white by default
-	// 	albedo.normalize();
-
-	// 	return t;
-	// }
-
-	double intersectTriangle(const Ray& ray, TriangleIndices& index, Vector &P, Vector &N, Vector &albedo){
-		Vector v0 = vertices[index.vtxi];
-        Vector v1 = vertices[index.vtxj];
-        Vector v2 = vertices[index.vtxk];
-
-		Vector edge1 = v1 - v0;
-        Vector edge2 = v2 - v0;
+		Vector e1 = B - A;
+        Vector e2 = C - A;
 		
-		Vector h = cross(ray.u, edge2);
-        double a = dot(edge1, h);
-        if (a > -1e-8 && a < 1e-8) return -1;
+		Vector h = cross(r.u, e2);
+        double a = dot(e1, h);
+        if (a > -1e-8 && a < 1e-8) return -1; // parallel to the plane
 
 		double f = 1.0 / a;
-        Vector s = ray.O - v0;
+        Vector s = r.O - A;
         double u = f * dot(s, h);
         if (u < 0.0 || u > 1.0) return -1;
 
-		Vector q = cross(s, edge1);
-        double v = f * dot(ray.u, q);
+		Vector q = cross(s, e1);
+        double v = f * dot(r.u, q);
         if (v < 0.0 || u + v > 1.0) return -1;
 
-		double t_temp = f * dot(edge2, q);
-		if (t_temp < 1e-8) return -1;
+		double t = f * dot(e2, q);
+		if (t < 1e-8) return -1;
 
-		P = ray.O + t_temp * ray.u;
-		N = cross(edge1, edge2);
+		P = r.O + t * r.u;
+		N = cross(e1, e2);
 		N.normalize();
 		albedo = Vector(1, 1, 1);
 		albedo.normalize();
-
-		//std::cout<<t_temp << std::endl;
 		
-		return t_temp;
+		return t;
 	}
 
-	virtual double intersect(const Ray& r, Vector &P, Vector &N, Vector &albedo){
-		bool intersection = false;
-		double bestt = 1e10;
-		TriangleIndices best_index;
+	double intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo) {
+        double nearest_t = std::numeric_limits<double>::max();
+        bool hit = false;
 
-		// here goes BVH algorithm
-		double temp;
-		if (!bvh.bbox.intersect(r, temp)) return -1;
+        std::vector<BVH*> stack;
+        stack.push_back(&bvh);
 
-		std::list<BVH*> nodes_to_visit;
-		nodes_to_visit.push_front(&bvh);
-		
-		double best_inter_distance = std::numeric_limits<double>::max();
-		double inter_distance;
+        while (!stack.empty()) {
+            BVH* node = stack.back();
+            stack.pop_back();
 
-		while(!nodes_to_visit.empty()){
-			BVH* curNode = nodes_to_visit.back();
-			nodes_to_visit.pop_back();
-			// if there is one child, then it is not a leaf so test the building box
-			if (curNode->left){
-				if (curNode->left->bbox.intersect(r, inter_distance)) {
-					if (inter_distance < best_inter_distance) {
-						nodes_to_visit.push_back(curNode->left);
-					}
-				}
-				if (curNode->right->bbox.intersect(r, inter_distance)) {
-					if(inter_distance < best_inter_distance){
-						nodes_to_visit.push_back(curNode->right);
-					}
-				}
-				else {
-					// test all triangles between curNode->starting triangle
-					// and curNode ending triangle as before.
-					// if an intersection is found, update best_inter_distance if needed
-					for (int i=curNode->start; i<curNode->end; i++){
-						double tmp = intersectTriangle(r, indices[i], P, N, albedo);
-						if (tmp == -1) continue;
-						intersection = true;
-						if (tmp <= best_inter_distance){
-							best_inter_distance = tmp;
-						}
-						if (tmp <= bestt){
-							bestt = tmp;
-							best_index = indices[i];
-						}
-					}
+            double t;
+            if (node->bbox.intersect(r, t)) {
+                if (node->left == nullptr && node->right == nullptr) { // Leaf node
+                    for (int i = node->start; i < node->end; ++i) {
+                        TriangleIndices& tri = indices[i];
+                        Vector tempP, tempN, tempAlbedo;
+                        t = intersectTriangle(r, tri, tempP, tempN, tempAlbedo);
+                        if (t > 0 && t < nearest_t) {
+                            nearest_t = t;
+                            P = tempP;
+                            N = tempN;
+							albedo = tempAlbedo;
+                            hit = true;
+                        }
+                    }
+                } else {
+                    if (node->left) stack.push_back(node->left);
+                    if (node->right) stack.push_back(node->right);
+                }
+            }
+        }
 
-				}
-			}
-		}
-
-		if (intersection){
-			double t = intersectTriangle(r, best_index, P, N, albedo);
-			return t;
-		} else {
-			return -1;
-		}
-	}
+        if (hit) {
+            return nearest_t;
+        } else {
+            return -1.0;
+        }
+    }
 };
 
 class Sphere : public Geometry {
