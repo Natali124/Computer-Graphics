@@ -337,6 +337,8 @@ public:
         }
         fclose(f);
 
+		scale_and_translate(0.6, Vector(0, -10, 0));
+
 		// computeBoundingBox(boundingBox, 0, 0);
 		buildBVH(&bvh, 0, indices.size());
     }
@@ -353,7 +355,7 @@ public:
 		
 		computeBoundingBox(curNode->bbox, starting_triangle, ending_triangle);
 
-		if (ending_triangle - starting_triangle <= 200) {
+		if (ending_triangle - starting_triangle <= 4) {
             return; // leaf node
         }
 
@@ -379,16 +381,13 @@ public:
 		curNode->left = new BVH();
 		curNode->right = new BVH();
 
-		std::cout << "new node" << std::endl;
 		buildBVH(curNode->left, starting_triangle, (starting_triangle + ending_triangle) / 2);
 		buildBVH(curNode->right, (starting_triangle + ending_triangle) / 2, ending_triangle);
 	}
 	
-	void scale_and_translate(int factor, const Vector &coordinate){
-		for (auto index: indices){
-			vertices[index.vtxi] = coordinate + vertices[index.vtxi]*factor;
-			vertices[index.vtxj] = coordinate + vertices[index.vtxj]*factor;
-			vertices[index.vtxk] = coordinate + vertices[index.vtxk]*factor;
+	void scale_and_translate(double factor, const Vector &translate){
+		for (int i = 0; i < vertices.size(); i++){
+			vertices[i] = (translate + vertices[i]*factor);
 		}
 	}
 
@@ -693,7 +692,6 @@ int main() {
 
 	TriangleMesh T;
 	T.readOBJ("cat.obj");
-	// T.scale_and_translate(0.8, Vector(0, -10, 0));
 	std::cout<<"mesh loaded"<<std::endl;
 
 
@@ -716,10 +714,10 @@ int main() {
 	Sphere S_side1(Vector(-1000, 0, 0), 940.0, Vector(255, 255, 0)); // sphere
 	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255)); // sphere
 
-	s.addSphere(S);
-	s.addSphere(S_more);
-	s.addSphere(S_inside);
-	s.addSphere(S_3);
+	// s.addSphere(S);
+	// s.addSphere(S_more);
+	// s.addSphere(S_inside);
+	// s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
 	s.addSphere(S_left);
