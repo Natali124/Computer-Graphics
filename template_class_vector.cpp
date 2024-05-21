@@ -16,7 +16,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-# define PI 3.14
+# define PI 3.14159265359
 # define epsilon 0.1
 
 class Vector {
@@ -76,9 +76,10 @@ public:
 
 class Geometry {
 public:
+	// Data fields
 	bool mirror;
 	double refindex;
-
+	// Constructor
 	virtual double intersect(const Ray& r, Vector &P, Vector &N, Vector &albedo) = 0;
 
 	Geometry() : mirror(false), refindex(0) {};
@@ -86,9 +87,10 @@ public:
 
 class BoundingBox {
 public:
+	// Data fields
 	Vector Bmin;
 	Vector Bmax;
-
+	// Constructor
 	BoundingBox () : Bmin(Vector(0,0,0)), Bmax(Vector(0,0,0)) {};
 
 	void extendBox(Vector& point){
@@ -113,8 +115,8 @@ public:
 		double tz_entry = std::min(tz0, tz1);
     	double tz_exit = std::max(tz0, tz1);
 		
-		double t_total_entry = std::max(tx_entry, std::max(ty_entry, tz_entry));
-		double t_total_exit = std::min(tx_exit, std::min(ty_exit, tz_exit));
+		double t_total_entry = std::max(tx_entry, std::max(ty_entry, tz_entry)); // entrance in the box
+		double t_total_exit = std::min(tx_exit, std::min(ty_exit, tz_exit)); // exit from the box
 
 		t = t_total_entry;
 		return (t_total_entry > 0 && t_total_entry < t_total_exit);
@@ -337,7 +339,19 @@ public:
         }
         fclose(f);
     }
- 
+
+	void load_texture(std::string filename) {
+		int w, h, c;
+		unsigned char* data = stbi_load(filename.c_str(), &w, &h, &c, 3);
+		if(data == nullptr)
+    		std::cout << "loading didn't work" << std::endl;
+		textures.push_back(data);
+		textW.push_back(w);
+		textH.push_back(h);
+	}
+	
+	std::vector<unsigned char*> textures;
+	std::vector<int> textW, textH;
     std::vector<TriangleIndices> indices;
     std::vector<Vector> vertices;
     std::vector<Vector> normals;
@@ -348,7 +362,7 @@ public:
 		curNode->start = starting_triangle;
 		curNode->end = ending_triangle;
 		computeBoundingBox(curNode->bbox, starting_triangle, ending_triangle);
-
+		
 		Vector diag = curNode->bbox.Bmax - curNode->bbox.Bmin;
 		int longestAxis;
 		if (diag[0] >= diag[1] && diag[0] >= diag[2]) {
@@ -385,48 +399,81 @@ public:
 		buildBVH(curNode->right, pivot_index, ending_triangle);
 	}
 	
-	void scale_and_translate(double factor, const Vector &translate){
-		for (int i = 0; i < vertices.size(); i++){
-			vertices[i] = (translate + vertices[i]*factor);
+	void scale_and_translate(double factor, const Vector &translation_vector){
+		for (size_t i = 0; i < vertices.size(); i++){
+			vertices[i] = (translation_vector + vertices[i]*factor);
 		}
 	}
 
 	double intersectTriangle(const Ray& r, TriangleIndices& index, Vector &P, Vector &N, Vector &albedo){
+
 		Vector A = vertices[index.vtxi];
-        Vector B = vertices[index.vtxj];
-        Vector C = vertices[index.vtxk];
+		Vector B = vertices[index.vtxj];
+		Vector C = vertices[index.vtxk];
 
 		Vector e1 = B - A;
-        Vector e2 = C - A;
-		
-		Vector h = cross(r.u, e2);
-        double a = dot(e1, h);
-        if (a > -1e-8 && a < 1e-8) return -1; // parallel to the plane
-
-		double f = 1.0 / a;
-        Vector s = r.O - A;
-        double u = f * dot(s, h);
-        if (u < 0.0 || u > 1.0) return -1;
-
-		Vector q = cross(s, e1);
-        double v = f * dot(r.u, q);
-        if (v < 0.0 || u + v > 1.0) return -1;
-
-		double t = f * dot(e2, q);
-		if (t < 1e-8) return -1;
-
-		P = r.O + t * r.u;
+		Vector e2 = C - A;
 		N = cross(e1, e2);
+
+		double beta = dot(e2, cross((A-r.O), r.u))/dot(r.u, N);
+		double gamma = -dot(e1, cross((A - r.O), r.u))/dot(r.u, N);
+		double alpha = 1-beta-gamma;
+
+		if (alpha <= 0 || beta <= 0 || gamma <= 0){
+			return -1;
+		}
+
+		double t = dot(A-r.O, N)/dot(r.u, N);
+		if (t <= 0) {
+			return -1;
+		}
+
+		P = A + beta*e1 + gamma*e2;
+
+		// Taking artist-defined normals
+		// Vector NA = normals[index.ni];
+		// Vector NB = normals[index.nj];
+		// Vector NC = normals[index.nk];
+
+		// N = alpha*NA + beta*NB + gamma*NC;
 		N.normalize();
-		albedo = Vector(1, 1, 1);
-		albedo.normalize();
+
+		// Getting albedos from texture
 		
+		Vector uvA = uvs[index.uvi];
+		Vector uvB = uvs[index.uvj];
+		Vector uvC = uvs[index.uvk];
+
+		Vector uvP = alpha*uvA + beta*uvB + gamma*uvC;
+
+		uvP[0] = fmod(100+uvP[0], 1.0);
+		uvP[1] = fmod(100-uvP[1], 1.0);
+
+		int w = textW[index.group];
+		int h = textH[index.group];
+
+		uvP[0] = uvP[0] * w;
+		uvP[1] = uvP[1] * h;
+
+		int u = std::max(0, std::min(w-1, static_cast<int>(uvP[0])));
+		int v = std::max(0, std::min(h-1, static_cast<int>(uvP[1])));
+
+		unsigned char* texture = textures[index.group];
+		int pixelIndex = (v*w + u) * 3;
+		
+		albedo = Vector(texture[pixelIndex]/255., texture[pixelIndex + 1]/255., texture[pixelIndex + 2]/255);
+		albedo = Vector(albedo[0]*albedo[0], albedo[1]*albedo[1], albedo[2]*albedo[2]);
+
+		// White cat
+		//albedo = Vector(1,1,1);
+		//albedo.normalize();
+
 		return t;
 	}
 
 	double intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo) {
         double nearest_t = std::numeric_limits<double>::max();
-        bool hit = false;
+        bool intersect = false;
 
         std::vector<BVH*> stack;
         stack.push_back(&bvh);
@@ -439,15 +486,15 @@ public:
             if (node->bbox.intersect(r, t)) {
                 if (node->left == nullptr && node->right == nullptr) { // Leaf node
                     for (int i = node->start; i < node->end; ++i) {
-                        TriangleIndices& tri = indices[i];
+                        TriangleIndices& index = indices[i];
                         Vector tempP, tempN, tempAlbedo;
-                        t = intersectTriangle(r, tri, tempP, tempN, tempAlbedo);
+                        t = intersectTriangle(r, index, tempP, tempN, tempAlbedo);
                         if (t > 0 && t < nearest_t) {
                             nearest_t = t;
                             P = tempP;
                             N = tempN;
 							albedo = tempAlbedo;
-                            hit = true;
+                            intersect = true;
                         }
                     }
                 } else {
@@ -457,7 +504,7 @@ public:
             }
         }
 
-        if (hit) {
+        if (intersect) {
             return nearest_t;
         } else {
             return -1.0;
@@ -511,26 +558,19 @@ public:
 	void addSphere(Sphere &s){
 		objects.push_back(&s);
 	}
-
-	void addTriangleMesh(TriangleMesh m){
-		objects.push_back(&m);
-	}
 	
 	int intersect(const Ray& r, Vector &P, Vector &N, Vector &albedo){
-		// intersect function with same prototype, go through all the objects and check if there is an intersection with a ray.
-		// make other intersect return t. find best intersection (smallest)
-		// std::cout << "debuggg" << std::endl;
+		// Goes through all the objects and checks if there is an intersection with the ray. Finds smallest t intersection.
+		// Returns index in objects array and sets P, N, and albedo.
 		double bestt = 1e10;
 		int bestind = -1;
 
-		for (int i = 0; i < objects.size(); i++){
+		for (size_t i = 0; i < objects.size(); i++){
 			double tmp;
-			// std::cout << (int)sizeof(objects) << (objects[i])->refindex << std::endl;
 			tmp = objects[i]->intersect(r, P, N, albedo);
 			if (tmp == -1){
 				continue;
 			}
-			// std::cout << "debug" << std::endl;
 			if (tmp <= bestt){
 				bestt = tmp;
 				bestind = i;
@@ -543,6 +583,7 @@ public:
 	}
 
 	bool check_shadow(Vector &P, Vector &N, Vector &albedo, Vector &L){
+		// Checks if a point is in shadow
 		Vector angle = L - P;
 		angle.normalize();
 		Ray r = Ray(P + N*epsilon, angle);
@@ -550,9 +591,6 @@ public:
 		Vector N_prime;
 
 		double t = intersect(r, P_prime, N_prime, albedo);
-
-		// std::cout << (P_prime - P).norm2() << " " << (L - P).norm2() << std::endl;
-		// std::cout << "N is " << N[0] << N[1] << N[2] << std:: endl;
 
 		if (t == -1){
 			return false;
@@ -652,17 +690,11 @@ public:
 			{
 				albedo.normalize();
 
-				//std::cout << "N " << " " << N[0] <<" " << N[1] <<" " << N[2] << std::endl;
-				//std::cout << "P " << P[0] <<" " << P[1] << " " <<P[2] << std::endl;
-				//std::cout << "albedo " << albedo[0] << albedo[1] << albedo[2] << std::endl;
-
 				Vector direct_light = I/(4*PI*(L-P).norm2())*(albedo/PI)*dot(N, (L-P)/(L-P).norm());
 
-				if (check_shadow(P, N, albedo, L)){
-					//std::cout << "shadow detected";
+				Vector albedoTemp;
+				if (check_shadow(P, N, albedoTemp, L)){
 					direct_light = Vector(0,0,0);
-				} else {
-					// std::cout << "shadow not detected" << std::endl; 
 				}
 				Vector w = randomDirection(N);
 				Ray indirect_ray = Ray(P + N*epsilon, w);
@@ -689,17 +721,15 @@ int main() {
 
 	Scene s = Scene(I, L);
 
-
 	TriangleMesh T;
 	T.readOBJ("cat.obj");
 	std::cout<<"mesh loaded"<<std::endl;
 
-	T.scale_and_translate(0.6, Vector(0, -10, 0));
+	T.scale_and_translate(0.8, Vector(0, -10, 0));
 	T.buildBVH(&(T.bvh), 0, T.indices.size());
+	T.load_texture("cat_diff.png");
 
 	s.objects.push_back(&T);
-
-	//s.objects.push_back(&T);
 	std::cout<<"mesh added to the objects"<<std::endl;
 
 	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 0, 1)); // sphere
@@ -709,6 +739,8 @@ int main() {
 	S.refindex = 1.5; // refraction index for glass
 	S_inside.refindex = 1/1.5;
 	S_3.mirror = true;
+	
+	S_more.refindex = 1.5;
 	// S_more.refindex = 1.5;
 
 	Sphere S_up(Vector(0, 1000, 0), 940.0, Vector(1, 0, 0)); // sphere
@@ -736,12 +768,13 @@ int main() {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			
 			Vector color(0,0,0);
-			int K = 1;
+			int K = 10; // Choose number of rays per pixel
 
 			std::random_device ran_dev;
 			std::mt19937 gen(ran_dev());
 			std::uniform_real_distribution<> unif_dis(0.0, 1.0);
 
+			#pragma omp parallel for schedule(dynamic, 1)
 			for (int _i=0; _i<K; _i++){
 
 				double r1 = unif_dis(gen);
