@@ -405,6 +405,20 @@ public:
 		}
 	}
 
+	void rotate_y_axis(double degree) {
+    double angle = degree * M_PI / 180;
+    double cos_angle = cos(angle);
+    double sin_angle = sin(angle);
+
+    for (size_t i = 0; i < vertices.size(); i++) {
+        double x_new = vertices[i][0] * cos_angle + vertices[i][2] * sin_angle;
+        double y_new = vertices[i][1];
+        double z_new = -vertices[i][0] * sin_angle + vertices[i][2] * cos_angle;
+
+        vertices[i] = Vector(x_new, y_new, z_new);
+    }
+}
+
 	double intersectTriangle(const Ray& r, TriangleIndices& index, Vector &P, Vector &N, Vector &albedo){
 
 		Vector A = vertices[index.vtxi];
@@ -431,11 +445,11 @@ public:
 		P = A + beta*e1 + gamma*e2;
 
 		// Taking artist-defined normals
-		// Vector NA = normals[index.ni];
-		// Vector NB = normals[index.nj];
-		// Vector NC = normals[index.nk];
+		Vector NA = normals[index.ni];
+		Vector NB = normals[index.nj];
+		Vector NC = normals[index.nk];
 
-		// N = alpha*NA + beta*NB + gamma*NC;
+		N = alpha*NA + beta*NB + gamma*NC;
 		N.normalize();
 
 		// Getting albedos from texture
@@ -725,7 +739,8 @@ int main() {
 	T.readOBJ("cat.obj");
 	std::cout<<"mesh loaded"<<std::endl;
 
-	T.scale_and_translate(0.8, Vector(0, -10, 0));
+	T.scale_and_translate(0.6, Vector(0, -10, 0));
+	T.rotate_y_axis(-45);
 	T.buildBVH(&(T.bvh), 0, T.indices.size());
 	T.load_texture("cat_diff.png");
 
@@ -750,10 +765,10 @@ int main() {
 	Sphere S_side1(Vector(-1000, 0, 0), 940.0, Vector(255, 255, 0)); // sphere
 	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255)); // sphere
 
-	// s.addSphere(S);
+	s.addSphere(S);
 	// s.addSphere(S_more);
-	// s.addSphere(S_inside);
-	// s.addSphere(S_3);
+	s.addSphere(S_inside);
+	s.addSphere(S_3);
 	s.addSphere(S_up);
 	s.addSphere(S_down);
 	s.addSphere(S_left);
@@ -768,7 +783,7 @@ int main() {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			
 			Vector color(0,0,0);
-			int K = 10; // Choose number of rays per pixel
+			int K = 100; // Choose number of rays per pixel
 
 			std::random_device ran_dev;
 			std::mt19937 gen(ran_dev());
