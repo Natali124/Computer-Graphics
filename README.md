@@ -1,7 +1,7 @@
 Project is in project_1.cpp file. It can be run by
 ```g++ project_2.cpp -o project``` and then ```./project``` or using Makefile.
 
-I also implemented working sliced optimal transport color transfer algorithm. You can find the code in ```Image Processing/code_template/main.cpp```. You can find result in image.png file of the same folder as well as here below.
+I also implemented working sliced optimal transport color transfer algorithm. You can find the code in ```Image Processing/code_template/main.cpp```. You can find the result in the image.png file of the same folder. You can also find the result here below.
 
 # Ray Tracing:
 <p align="center">
@@ -18,10 +18,16 @@ I also implemented working sliced optimal transport color transfer algorithm. Yo
 
 # Image Processing:
 Input image:
-![8733654151_b9422bb2ec_k](https://github.com/Natali124/Computer-Graphics/assets/58912325/b851a827-09ea-49e8-b589-8a9958c70b98)
+<p align="center">
+  <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/b851a827-09ea-49e8-b589-8a9958c70b98" alt="image">
+</p>
 
 Model image:
-![redim](https://github.com/Natali124/Computer-Graphics/assets/58912325/cae69e38-2099-481a-8581-65e80238b328)
+<p align="center">
+  <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/cae69e38-2099-481a-8581-65e80238b328" alt="image">
+</p>
 
 Result image:
-![image](https://github.com/Natali124/Computer-Graphics/assets/58912325/51a2c577-b937-4e7a-bcf3-bd0c526b4fd4)
+<p align="center">
+  <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/51a2c577-b937-4e7a-bcf3-bd0c526b4fd4" alt="image">
+</p>
