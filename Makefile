@@ -1,10 +1,10 @@
 CXX := g++
-CXXFLAGS := -Wall -fopenmp
+CXXFLAGS := -Wall -fopenmp -ggdb
 INCLUDES := -I.
 
-SRCS := template_class_vector.cpp
+SRCS := project_1.cpp
 OBJS := $(SRCS:.cpp=.o)
-EXEC := template_class_vector
+EXEC := project_1
 
 all: $(EXEC)
 
@@ -22,3 +22,6 @@ clean:
 
 cleanimage:
 	$(RM) image.png
+
+project:
+	g++ project_2.cpp -o project
