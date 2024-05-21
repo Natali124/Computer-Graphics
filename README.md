@@ -6,5 +6,5 @@ Project is in project_1.cpp file. It can be run by
 </p>
 
 <p align="center">
-  <img src="https://github.com/Natali124/Computer-Graphics" alt="image">
+  <img src="https://github.com/Natali124/Computer-Graphics\image.png" alt="image">
 </p>
