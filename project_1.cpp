@@ -739,7 +739,7 @@ int main() {
 	T.readOBJ("cat.obj");
 	std::cout<<"mesh loaded"<<std::endl;
 
-	T.scale_and_translate(0.6, Vector(0, -10, 0));
+	T.scale_and_translate(0.4, Vector(20, -10, 0));
 	T.rotate_y_axis(-45);
 	T.buildBVH(&(T.bvh), 0, T.indices.size());
 	T.load_texture("cat_diff.png");
