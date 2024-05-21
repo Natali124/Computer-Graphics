@@ -4,6 +4,7 @@ Project is in project_1.cpp file. It can be run by
 I also implemented working sliced optimal transport color transfer algorithm. You can find the code in ```Image Processing/code_template/main.cpp```. You can find the result in the ```image.png``` file of the same folder. You can also find the result here below.
 
 # Ray Tracing:
+You can find detailed information about ray-tracing results in ```Project_Report.pdf```.
 <p align="center">
   <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/4d3dd644-3733-4ae2-a30a-10925119d726" alt="image">
 </p>
