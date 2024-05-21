@@ -8,3 +8,7 @@ Project is in project_1.cpp file. It can be run by
 <p align="center">
   <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/0f6de528-7396-4932-a780-4d04c010d28a" alt="image">
 </p>
+
+<p align="center">
+  <img src="https://github.com/Natali124/Computer-Graphics/assets/58912325/c6c23523-4b01-4570-8041-82c39b32897a" alt="image">
+</p>
