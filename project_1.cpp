@@ -147,10 +147,11 @@ public:
 class TriangleMesh : public Geometry {
 public:
 	BVH bvh;
+	bool texture;
 
   ~TriangleMesh() {}
 
-    TriangleMesh() : bvh() {};
+    TriangleMesh() : bvh(), texture(false) {};
 
 	void computeBoundingBox(BoundingBox& box, int triStart, int triEnd) {
 		box.Bmin = Vector(1e10, 1e10, 1e10);
@@ -343,8 +344,12 @@ public:
 	void load_texture(std::string filename) {
 		int w, h, c;
 		unsigned char* data = stbi_load(filename.c_str(), &w, &h, &c, 3);
-		if(data == nullptr)
-    		std::cout << "loading didn't work" << std::endl;
+		if(data == nullptr){
+			std::cout << "loading didn't work" << std::endl;
+			return;
+		}
+		texture = true;
+
 		textures.push_back(data);
 		textW.push_back(w);
 		textH.push_back(h);
@@ -453,35 +458,36 @@ public:
 		N.normalize();
 
 		// Getting albedos from texture
-		
-		Vector uvA = uvs[index.uvi];
-		Vector uvB = uvs[index.uvj];
-		Vector uvC = uvs[index.uvk];
 
-		Vector uvP = alpha*uvA + beta*uvB + gamma*uvC;
+		if (!texture){
+			// default if texture is not loaded
+			albedo = Vector(0.5,0.5,0);
+			albedo.normalize();
+		} else {
+			Vector uvA = uvs[index.uvi];
+			Vector uvB = uvs[index.uvj];
+			Vector uvC = uvs[index.uvk];
 
-		uvP[0] = fmod(100+uvP[0], 1.0);
-		uvP[1] = fmod(100-uvP[1], 1.0);
+			Vector uvP = alpha*uvA + beta*uvB + gamma*uvC;
 
-		int w = textW[index.group];
-		int h = textH[index.group];
+			uvP[0] = fmod(100+uvP[0], 1.0);
+			uvP[1] = fmod(100-uvP[1], 1.0);
 
-		uvP[0] = uvP[0] * w;
-		uvP[1] = uvP[1] * h;
+			int w = textW[index.group];
+			int h = textH[index.group];
 
-		int u = std::max(0, std::min(w-1, static_cast<int>(uvP[0])));
-		int v = std::max(0, std::min(h-1, static_cast<int>(uvP[1])));
+			uvP[0] = uvP[0] * w;
+			uvP[1] = uvP[1] * h;
 
-		unsigned char* texture = textures[index.group];
-		int pixelIndex = (v*w + u) * 3;
-		
-		albedo = Vector(texture[pixelIndex]/255., texture[pixelIndex + 1]/255., texture[pixelIndex + 2]/255);
-		albedo = Vector(albedo[0]*albedo[0], albedo[1]*albedo[1], albedo[2]*albedo[2]);
+			int u = std::max(0, std::min(w-1, static_cast<int>(uvP[0])));
+			int v = std::max(0, std::min(h-1, static_cast<int>(uvP[1])));
 
-		// White cat
-		//albedo = Vector(1,1,1);
-		//albedo.normalize();
-
+			unsigned char* texture = textures[index.group];
+			int pixelIndex = (v*w + u) * 3;
+			
+			albedo = Vector(texture[pixelIndex]/255., texture[pixelIndex + 1]/255., texture[pixelIndex + 2]/255);
+			albedo = Vector(albedo[0]*albedo[0], albedo[1]*albedo[1], albedo[2]*albedo[2]);
+		}
 		return t;
 	}
 
@@ -734,19 +740,25 @@ int main() {
 	double I = 2e10; // intensity
 
 	Scene s = Scene(I, L);
-
+	
+	// Human
 	TriangleMesh T;
-	T.readOBJ("cat.obj");
+	T.readOBJ("FinalBaseMesh.obj");
 	std::cout<<"mesh loaded"<<std::endl;
-
-	T.scale_and_translate(0.4, Vector(20, -10, 0));
+	T.scale_and_translate(1.5, Vector(-4, -10, 2));
 	T.rotate_y_axis(-45);
 	T.buildBVH(&(T.bvh), 0, T.indices.size());
-	T.load_texture("cat_diff.png");
-
 	s.objects.push_back(&T);
 	std::cout<<"mesh added to the objects"<<std::endl;
-
+	// Cat
+	TriangleMesh cat;
+	cat.readOBJ("cat.obj");
+	cat.scale_and_translate(0.3, Vector(-20, -10, 4));
+	cat.rotate_y_axis(-45);
+	cat.buildBVH(&(cat.bvh), 0, cat.indices.size());
+	cat.load_texture("cat_diff.png");
+	s.objects.push_back(&cat);
+	// Spheres
 	Sphere S(Vector(20, 0, 0), 10.0, Vector(1, 0, 1)); // sphere
 	Sphere S_inside(Vector(20, 0, 0), 9.0, Vector(1, 1, 1)); // sphere
 	Sphere S_more(Vector(0, 0, 0), 10.0, Vector(1, 1, 0)); // sphere
@@ -765,11 +777,13 @@ int main() {
 	Sphere S_side1(Vector(-1000, 0, 0), 940.0, Vector(255, 255, 0)); // sphere
 	Sphere S_side2(Vector(1000, 0, 0), 940.0, Vector(0, 255, 255)); // sphere
 
+	S_left.mirror = true;
+
 	s.addSphere(S);
 	// s.addSphere(S_more);
 	s.addSphere(S_inside);
-	s.addSphere(S_3);
-	s.addSphere(S_up);
+	// s.addSphere(S_3);
+	// s.addSphere(S_up);
 	s.addSphere(S_down);
 	s.addSphere(S_left);
 	s.addSphere(S_right);
@@ -783,7 +797,7 @@ int main() {
 			double z = -W/(2*tan(fov/2)); // field of view divided by 2
 			
 			Vector color(0,0,0);
-			int K = 1; // Choose number of rays per pixel
+			int K = 10; // Choose number of rays per pixel
 
 			std::random_device ran_dev;
 			std::mt19937 gen(ran_dev());
