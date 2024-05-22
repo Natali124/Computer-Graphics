@@ -1,5 +1,5 @@
 Project is in project_1.cpp file. It can be run by
-```g++ project_2.cpp -o project``` and then ```./project``` or using Makefile.
+```g++ project_1.cpp -o project``` and then ```./project``` or using Makefile.
 
 I also implemented working sliced optimal transport color transfer algorithm. You can find the code in ```Image Processing/code_template/main.cpp```. You can find the result in the ```image.png``` file of the same folder. You can also find the result here below.
 
