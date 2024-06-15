@@ -6,6 +6,7 @@
 #include <string>
 #include <stdio.h>
 #include <nanoflann.hpp>
+#include "lbfgs.h"
 
 class Vector {
 public:
@@ -60,51 +61,49 @@ public:
 };  
  
 // saves a static svg file. The polygon vertices are supposed to be in the range [0..1], and a canvas of size 1000x1000 is created
-    void save_svg(const std::vector<Polygon> &polygons, std::string filename, std::string fillcol = "none") {
-        FILE* f = fopen(filename.c_str(), "w+"); 
-        fprintf(f, "<svg xmlns = \"http://www.w3.org/2000/svg\" width = \"1000\" height = \"1000\">\n");
-        for (int i=0; i<polygons.size(); i++) {
-            fprintf(f, "<g>\n");
-            fprintf(f, "<polygon points = \""); 
-            for (int j = 0; j < polygons[i].vertices.size(); j++) {
-                fprintf(f, "%3.3f, %3.3f ", (polygons[i].vertices[j][0] * 1000), (1000 - polygons[i].vertices[j][1] * 1000));
-            }
-            fprintf(f, "\"\nfill = \"%s\" stroke = \"black\"/>\n", fillcol.c_str());
-            fprintf(f, "</g>\n");
+void save_svg(const std::vector<Polygon> &polygons, std::string filename, std::string fillcol = "none") {
+    FILE* f = fopen(filename.c_str(), "w+"); 
+    fprintf(f, "<svg xmlns = \"http://www.w3.org/2000/svg\" width = \"1000\" height = \"1000\">\n");
+    for (int i=0; i<polygons.size(); i++) {
+        fprintf(f, "<g>\n");
+        fprintf(f, "<polygon points = \""); 
+        for (int j = 0; j < polygons[i].vertices.size(); j++) {
+            fprintf(f, "%3.3f, %3.3f ", (polygons[i].vertices[j][0] * 1000), (1000 - polygons[i].vertices[j][1] * 1000));
         }
-        fprintf(f, "</svg>\n");
-        fclose(f);
+        fprintf(f, "\"\nfill = \"%s\" stroke = \"black\"/>\n", fillcol.c_str());
+        fprintf(f, "</g>\n");
     }
+    fprintf(f, "</svg>\n");
+    fclose(f);
+}
 
 
 class Voronoi{
 public:
     Voronoi() {}
 
-    // sutherland hodgman
-    Polygon clip_by_bisector(const Polygon& cell, const Vector& P0, const Vector& Pi, double w0, double w1){
+    // Sutherland-Hodgman algorithm
+    Polygon clip_by_bisector(const Polygon& cell, const Vector& P0, const Vector& Pi, const double &w0, const double &wi){
         Polygon result;
         int N = cell.vertices.size();
-        Vector offset = (w0-w1)/(2. * (P0-Pi).norm2()) * (Pi-P0);
-        Vector M_prime = 
+        Vector offset = (w0-wi)/(2. * (P0-Pi).norm2()) * (Pi-P0);
+        Vector M = (P0 + Pi)/2;
+        Vector M_prime = M + offset;
         for (int i=0; i<cell.vertices.size(); i++){
             const Vector& A = cell.vertices[i==0 ? (N-1) : i - 1];
             const Vector& B = cell.vertices[i];
 
-            if ((B-P0).norm2() <= (B - Pi).norm2()) { // B inside
-                if ((A-P0).norm2() > (A-Pi).norm2()){ // A is outside
-                    Vector M = (P0 + Pi)/2;
-                    Vector M_prime = (w0-w1)/(2. * (P0-Pi).norm2()) * (Pi-P0);
-                    double t = dot(M-A, Pi-P0)/dot(B-A, Pi-P0);
+            if ((B-P0).norm2() - w0 <= (B - Pi).norm2() - wi) { // B inside
+                if ((A-P0).norm2() - w0 > (A-Pi).norm2() - wi){ // A is outside
+                    double t = dot(M_prime-A, Pi-P0)/dot(B-A, Pi-P0);
                     Vector P = A + t*(B - A);
                     result.vertices.push_back(P);
                 }
                 result.vertices.push_back(B);
             }
             else {
-                if ((A-P0).norm2() <= (A-Pi).norm2()) { // A is inside
-                    Vector M = (P0 + Pi)/2;
-                    double t = dot(M-A, Pi-P0)/dot(B-A, Pi-P0);
+                if ((A-P0).norm2() - w0 <= (A-Pi).norm2() - wi) { // A is inside
+                    double t = dot(M_prime-A, Pi-P0)/dot(B-A, Pi-P0);
                     Vector P = A + t*(B - A);
                     result.vertices.push_back(P);
                 }
@@ -132,7 +131,7 @@ public:
                 if (i == j){
                     continue;
                 }
-                cell = clip_by_bisector(cell, points[i], points[j]);
+                cell = clip_by_bisector(cell, points[i], points[j], weights[i], weights[j]);
             }
             cells[i] = cell;
         }
@@ -141,36 +140,157 @@ public:
     std::vector<Vector> points;
     std::vector<Polygon> cells;
     std::vector<double> weights;
+    std::vector<double> lambdas;
 };
- 
+
+
+class SemiDiscreteOT{
+public: 
+
+    Voronoi diagram;
+    SemiDiscreteOT():diagram(){}
+
+    // Integral calculation for _evaluate
+    static double compute_integral_dist(const Polygon& cell, const Vector& P_i) {
+        // Integral over the cell of y_i of distance from points to y_i
+        // We use formula (4.12) in lecture notes
+        double integral = 0.0;
+        int N = cell.vertices.size();
+
+        for (int k = 0; k < N; k++){
+            double x_k = cell.vertices[k % N][0];
+            double x_k_1 = cell.vertices[(k-1) % N][0];
+            double y_k = cell.vertices[k % N][1];
+            double y_k_1 = cell.vertices[(k-1) % N][1];
+            
+            double first_term = x_k_1*y_k - x_k*y_k_1;
+            double second_term = x_k_1*x_k_1 + x_k_1*x_k + x_k*x_k + y_k_1*y_k_1 + y_k_1*y_k + y_k*y_k;
+            double third_term = -4*(P_i[0]*(x_k_1 + x_k) + P_i[1]*(y_k_1 + y_k)) + 6*P_i.norm2();
+            integral += first_term * (second_term + third_term);
+        }
+        integral = integral / 12;
+        return integral;
+    }
+
+    // Integral calculation for _evaluate
+    static double compute_area(const Polygon& cell) {
+        // Integral over the cell of y_i (we assume f = 1)
+        // We use formula: A = 1/2 abs( sum x_i*y_{i+1} - x_{i+1}*y_i)
+        double integral = 0.0;
+        int N = cell.vertices.size();
+        // std::cout << "N is " << N << std::endl;
+
+        for (int i = 0; i < N; i++) {
+            double x_i = cell.vertices[i % N][0];
+            double x_i1 = cell.vertices[(i+1) % N][0];
+            double y_i = cell.vertices[i % N][1];
+            double y_i1 = cell.vertices[(i+1) % N][1];
+
+            integral += x_i*y_i1 - x_i1*y_i;
+        }
+        integral = std::abs(integral)/2;
+        return integral;
+    }
+
+    static lbfgsfloatval_t _evaluate(
+    void *instance,
+    const lbfgsfloatval_t *x,
+    lbfgsfloatval_t *g,
+    const int n,
+    const lbfgsfloatval_t step
+    ){
+        // std::cout << "starting evaluate function" << std::endl;
+        SemiDiscreteOT* ot = reinterpret_cast<SemiDiscreteOT*>(instance);
+        lbfgsfloatval_t fx = 0.0;
+
+        std::vector<double>weights_from_x = std::vector<double>(x, x + n);
+        // std::cout << "weights: " << weights_from_x[0] << std::endl;
+        
+        // Get new voronoi cells using new weights
+        // Voronoi vor_new;
+        // vor_new.points = ot->diagram.points;
+        // vor_new.weights = weights_from_x;
+        // vor_new.compute();
+
+        ot->diagram.weights = weights_from_x;
+        ot->diagram.compute();
+        
+        std::cout << ot->diagram.cells[0].vertices.size() << std::endl;
+
+        // for each point
+        for (int i = 0; i < n; i++) {
+            Vector y_i = ot->diagram.points[i];
+            Polygon cell_i = ot->diagram.cells[i];
+            double w_i = weights_from_x[i];
+            double lambda_i = ot->diagram.lambdas[i];
+
+            double cell_area = compute_area(cell_i);
+
+            fx += compute_integral_dist(cell_i, y_i) - cell_area*w_i + lambda_i*w_i;
+            g[i] = -cell_area + lambda_i;
+            // std::cout << "cell area" << cell_area<< std::endl;
+        }
+        // std::cout << "function: " << fx << std::endl;
+        return fx;
+    }
+
+    static int _progress(
+    void *instance,
+    const lbfgsfloatval_t *x,
+    const lbfgsfloatval_t *g,
+    const lbfgsfloatval_t fx,
+    const lbfgsfloatval_t xnorm,
+    const lbfgsfloatval_t gnorm,
+    const lbfgsfloatval_t step,
+    int n,
+    int k,
+    int ls
+    )
+    {
+        printf("Iteration %d:\n", k);
+        printf("  fx = %f, x[0] = %f, x[1] = %f\n", fx, x[0], x[1]);
+        printf("  xnorm = %f, gnorm = %f, step = %f\n", xnorm, gnorm, step);
+        printf("\n");
+        return 0;
+    }
+
+
+
+    void optimize(){
+        int N = diagram.points.size();
+        diagram.weights.resize(N);
+        for (int i = 0; i < N; i++){
+            diagram.weights[i] = 10; // initialize weights to a constant value
+            diagram.lambdas[i] = 10;
+        }
+
+        double objectivefct = -1;
+        std::vector<double> optimized_weights(N, 10); // initialization of optimized weights
+        auto ret = lbfgs(N, &optimized_weights[0], &objectivefct, _evaluate, _progress, this, NULL);
+        // auto ret = lbfgs(N, optimized_weights.data(), &objectivefct, _evaluate, _progress, this, NULL);
+        printf("L-BFGS optimization terminated with status code = %d\n", ret);
+    }
+};
+
 
 int main(){
-    std::vector<Polygon> test;
-    Polygon pol1, pol2;
-    pol1.vertices.push_back(Vector(0,0,0));
-    pol1.vertices.push_back(Vector(0,1,0));
-    pol1.vertices.push_back(Vector(1,1,0));
-
-    pol2.vertices.push_back(Vector(0.5,0.5,0));
-    pol2.vertices.push_back(Vector(0.5,1,0));
-    pol2.vertices.push_back(Vector(1,0.3,0));
-    pol2.vertices.push_back(Vector(0.3,0.3,0));
-
-    test.push_back(pol1);
-    test.push_back(pol2);
-
     Voronoi vor;
-    int N = 1000;
+    int N = 100;
     vor.points.resize(N);
     vor.weights.resize(N);
+    vor.lambdas.resize(N);
 
     for (int i=0; i<N; i++){
         vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
-        vor.weights[i] = rand()/double(RAND_MAX); // random initialization for testing
+        vor.weights[i] = (rand()%10 + 1); // rand()/double(RAND_MAX); // rand()%100; // random initialization for testing
+        vor.lambdas[i] = (rand()%10 + 1); // rand()/double(RAND_MAX); // rand()%100; // random initialization for testing
     }
     vor.compute();
+    SemiDiscreteOT ot;
+    ot.diagram = vor;
+    ot.optimize();
     
-    save_svg(vor.cells, "voronoi.svg");
+    // save_svg(vor.cells, "ot.svg");
 
     return 0;
 }
