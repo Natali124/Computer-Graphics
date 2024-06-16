@@ -254,41 +254,54 @@ public:
             m_x[i] = (double)0.5; // initialize
         }
 
-        for (int i = 0; i < N; i++) {
-            if (diagram.points[i][0] < 0.1 || diagram.points[i][0] > 0.9 || diagram.points[i][1] < 0.1 || diagram.points[i][1] > 0.9 ) { // far from center
-                m_x[i] = 0.99;
-            } else {
-                m_x[i] = 1; // more near center
-            }
-        }
-
         diagram.weights.resize(N);
-
-        // for (int i = 0; i < N; i++){
-        //     diagram.lambdas[i] = double(1)/double(N); // set diagram values to 1/N
-        // }
 
         double objectivefct = -1;
         
         auto ret = lbfgs(N, m_x, &objectivefct, _evaluate, _progress, this, NULL);
         printf("L-BFGS optimization terminated with status code = %d\n", ret);
     }
+
+
+    // returns centroid of a passed polygon
+    Vector find_centroid(Polygon& pol) {
+        double C_x = 0.0;
+        double C_y = 0.0;
+        size_t N = pol.vertices.size();
+        for (int i = 0; i <= N - 1; i++) {
+            C_x += (pol.vertices[i][0] + pol.vertices[(i+1)%N][0]) * (pol.vertices[i][0]*pol.vertices[(i+1)%N][1] - pol.vertices[(i+1)%N][0]*pol.vertices[i][1]);
+            C_y += (pol.vertices[i][1] + pol.vertices[(i+1)%N][1]) * (pol.vertices[i][0]*pol.vertices[(i+1)%N][1] - pol.vertices[(i+1)%N][0]*pol.vertices[i][1]);
+        }
+        double A = compute_area(pol);
+        Vector centroid = Vector(C_x, C_y, 0.0) / 6.0*A;
+        return centroid;
+    }
+
+    /*
+    Gallouet Merigot scheme. Pass positions, velocity, and mass and updates positions and velocity
+    */
+    void GallouetMerigot(std::vector<Vector>&positions, std::vector<Vector>&velocity, const std::vector<double> &mass){
+        // optimize weights of W of cells of all particles
+        // To do: optimize weights
+        std::vector<Polygon>cells;
+        // Apply forces
+        double dt = 0.01;
+        double eps = 1e-6;
+        int N = positions.size();
+        Vector g(0.0, -0.5, 0.0); // downwards
+        for (int i=0; i<N; i++){
+            Vector F_spring = (find_centroid(cells[i]) - positions[i]);
+            Vector F = F_spring + mass[i]*g;
+            Vector v_new = velocity[i] + dt/mass[i]*F;
+            Vector x_new = positions[i] + dt*velocity[i];
+
+            // update positions and velocity
+            positions[i] = x_new;
+            velocity[i] = v_new;
+        }
+    }
 };
 
-
-/*
-Gallouet Merigot scheme. Pass positions, velocity, and mass and updates positions and velocity
-*/
-// void GallouetMerigot(std::vector<Vector>&positions, std::vector<Vector>&velocity, const std::vector<double> &mass){
-//     // optimize weights of W of cells of all particles
-//     std::vector<Polygon>cells;
-//     //
-//     int N = positions.size();
-//     for (int i=0; i<N; i++){
-//         Vector F_spring = (centroid(cells[i]) - positions[i]);
-//         F
-//     }
-// }
 
 int main(){
     
