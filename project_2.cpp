@@ -112,7 +112,6 @@ public:
         return result;
     }
 
-
     void compute(){
 
         cells.clear();
@@ -144,103 +143,50 @@ public:
     std::vector<double> lambdas; // For TD7
 };
 
-Polygon clip_by_bisector(const Polygon& cell, const Vector& P0, const Vector& Pi, double &w0, double &wi){
-    Polygon result;
-    int N = cell.vertices.size();
-    Vector offset = (w0-wi)/(2. * (P0-Pi).norm2()) * (Pi-P0);
-    Vector M = (P0 + Pi)/2;
-    Vector M_prime = M + offset;
-    for (int i=0; i<cell.vertices.size(); i++){
-        const Vector& A = cell.vertices[i==0 ? (N-1) : i - 1];
-        const Vector& B = cell.vertices[i];
-
-        if ((B-P0).norm2() - w0 <= (B - Pi).norm2() - wi) { // B inside
-            if ((A-P0).norm2() - w0 > (A-Pi).norm2() - wi){ // A is outside
-                double t = dot(M_prime-A, Pi-P0)/dot(B-A, Pi-P0);
-                Vector P = A + t*(B - A);
-                result.vertices.push_back(P);
-            }
-            result.vertices.push_back(B);
-        }
-        else {
-            if ((A-P0).norm2() - w0 <= (A-Pi).norm2() - wi) { // A is inside
-                double t = dot(M_prime-A, Pi-P0)/dot(B-A, Pi-P0);
-                Vector P = A + t*(B - A);
-                result.vertices.push_back(P);
-            }
-        }
-    }
-    return result;
-}
-
-std::vector<Polygon> compute(std::vector<Vector>& points, std::vector<double>& weights){
-    Polygon square;
-    square.vertices.push_back(Vector(0,0,0));
-    square.vertices.push_back(Vector(1,0,0));
-    square.vertices.push_back(Vector(1,1,0));
-    square.vertices.push_back(Vector(0,1,0));
-
-    std::vector<Polygon>cells(points.size());
-
-    for (int i =0; i < points.size(); i++){
-        // cell number i
-        Polygon cell = square;
-        #pragma omp parallel for schedule(dynamic, 1)
-        for (int j=0; j<points.size(); j++){
-            if (i == j){
-                continue;
-            }
-            cell = clip_by_bisector(cell, points[i], points[j], weights[i], weights[j]);
-        }
-        cells[i] = cell;
-    }
-    return cells;
-}
-
 class SemiDiscreteOT{
 public: 
 
     Voronoi diagram;
     SemiDiscreteOT():diagram(){}
 
-    // Integral calculation for _evaluate
+    // Integral calculation
     static double compute_integral_dist(const Polygon& cell, const Vector& P_i) {
         // Integral over the cell of y_i of distance from points to y_i
         // We use formula (4.12) in lecture notes
         double integral = 0.0;
         int N = cell.vertices.size();
 
-        for (int k = 1; k < N; k++){
-            double x_k = cell.vertices[k][0];
-            double x_k_1 = cell.vertices[k-1][0];
-            double y_k = cell.vertices[k][1];
-            double y_k_1 = cell.vertices[k-1][1];
+        for (int k = 1; k <= N; k++){
+            double x_k = cell.vertices[k % N][0];
+            double x_k_1 = cell.vertices[(k-1)%N][0];
+            double y_k = cell.vertices[k%N][1];
+            double y_k_1 = cell.vertices[(k-1)%N][1];
             
             double first_term = x_k_1*y_k - x_k*y_k_1;
             double second_term = x_k_1*x_k_1 + x_k_1*x_k + x_k*x_k + y_k_1*y_k_1 + y_k_1*y_k + y_k*y_k;
             double third_term = -4*(P_i[0]*(x_k_1 + x_k) + P_i[1]*(y_k_1 + y_k)) + 6*P_i.norm2();
             integral += first_term * (second_term + third_term);
         }
-        integral = integral / 12;
+        integral = integral / 12.0;
         return integral;
     }
 
-    // Integral calculation for _evaluate
+    // Integral calculation
     static double compute_area(const Polygon& cell) {
         // Integral over the cell of y_i (we assume f = 1)
         // We use formula: A = 1/2 abs( sum x_i*y_{i+1} - x_{i+1}*y_i)
         double integral = 0.0;
         int N = cell.vertices.size();
 
-        for (int i = 0; i < N-1; i++) {
+        for (int i = 0; i < N; i++) {
             double x_i = cell.vertices[i][0];
-            double x_i1 = cell.vertices[i+1][0];
+            double x_i1 = cell.vertices[(i+1)%N][0];
             double y_i = cell.vertices[i][1];
-            double y_i1 = cell.vertices[i+1][1];
+            double y_i1 = cell.vertices[(i+1)%N][1];
 
             integral += x_i*y_i1 - x_i1*y_i;
         }
-        integral = std::abs(integral)/2;
+        integral = std::abs(integral)/2.0;
         return integral;
     }
 
@@ -253,22 +199,28 @@ public:
     ){
         SemiDiscreteOT* ot = reinterpret_cast<SemiDiscreteOT*>(instance);
         lbfgsfloatval_t fx = 0.0;
+
+        // std::vector<double> weights_to_use = std::vector<double>(x, x + n);
         
-        std::vector<double> weights_to_use = std::vector<double>(x, x + n); 
+        for (int i = 0; i < n; i ++){
+            ot->diagram.weights[i] = x[i];
+        }
+
+        // ot->diagram.weights = weights_to_use;
+        ot->diagram.compute();
+        
         auto points_to_use = ot->diagram.points;
         auto lambdas_to_use = ot->diagram.lambdas;
-        auto cells_to_use = compute(points_to_use, weights_to_use);
-        // std::cout << cells_to_use.size() << std::endl;
+        auto cells_to_use = ot->diagram.cells;
 
         for (int i = 0; i < points_to_use.size(); i++) {
             Vector y_i = points_to_use[i];
             Polygon cell_i = cells_to_use[i];
-            double w_i = weights_to_use[i];
             double lambda_i = lambdas_to_use[i];
 
             double cell_area = compute_area(cell_i);
 
-            fx += compute_integral_dist(cell_i, y_i) - w_i*cell_area + lambda_i*w_i;
+            fx += compute_integral_dist(cell_i, y_i) - x[i]*cell_area + lambda_i*x[i];
             g[i] = cell_area - lambda_i;
         }
         return -fx;
@@ -278,7 +230,7 @@ public:
         void *instance,
         const lbfgsfloatval_t *x,
         const lbfgsfloatval_t *g,
-        const lbfgsfloatval_t fx,
+        const lbfgsfloatval_t fx,   
         const lbfgsfloatval_t xnorm,
         const lbfgsfloatval_t gnorm,
         const lbfgsfloatval_t step,
@@ -296,22 +248,47 @@ public:
 
     void optimize(){
         int N = diagram.points.size();
-        diagram.weights.resize(N);
-        diagram.lambdas.resize(N);
-        for (int i = 0; i < N; i++){
-            diagram.weights[i] = 0.8; // initialize weights to a constant value
-            diagram.lambdas[i] = double(1)/double(N);
+        lbfgsfloatval_t *m_x = lbfgs_malloc(N);
+        
+        for (int i = 0; i < N; i++) {
+            m_x[i] = (double)0.5; // initialize
         }
-        double objectivefct = -1;
-        std::vector<double> optimized_weights(N, 0.8); // initialization of optimized weights
 
-        auto ret = lbfgs(N, &optimized_weights[0], &objectivefct, _evaluate, _progress, this, NULL);
-        // auto ret = lbfgs(N, optimized_weights.data(), &objectivefct, _evaluate, _progress, this, NULL);
-        diagram.weights = optimized_weights;
-        diagram.compute();
+        for (int i = 0; i < N; i++) {
+            if (diagram.points[i][0] < 0.1 || diagram.points[i][0] > 0.9 || diagram.points[i][1] < 0.1 || diagram.points[i][1] > 0.9 ) { // far from center
+                m_x[i] = 0.99;
+            } else {
+                m_x[i] = 1; // more near center
+            }
+        }
+
+        diagram.weights.resize(N);
+
+        // for (int i = 0; i < N; i++){
+        //     diagram.lambdas[i] = double(1)/double(N); // set diagram values to 1/N
+        // }
+
+        double objectivefct = -1;
+        
+        auto ret = lbfgs(N, m_x, &objectivefct, _evaluate, _progress, this, NULL);
         printf("L-BFGS optimization terminated with status code = %d\n", ret);
     }
 };
+
+
+/*
+Gallouet Merigot scheme. Pass positions, velocity, and mass and updates positions and velocity
+*/
+// void GallouetMerigot(std::vector<Vector>&positions, std::vector<Vector>&velocity, const std::vector<double> &mass){
+//     // optimize weights of W of cells of all particles
+//     std::vector<Polygon>cells;
+//     //
+//     int N = positions.size();
+//     for (int i=0; i<N; i++){
+//         Vector F_spring = (centroid(cells[i]) - positions[i]);
+//         F
+//     }
+// }
 
 int main(){
     
@@ -326,15 +303,23 @@ int main(){
     for (int i=0; i<N; i++){
         vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
         vor.weights[i] = rand()/double(RAND_MAX);
-        vor.lambdas[i] = rand()/double(RAND_MAX);
+        vor.lambdas[i] = 1.0/double(N);
     }
 
-    vor.compute();
+    double sum;
+    Vector C (0.5, 0.5, 0); // center
+    for (int j = 0; j < N; j++) {
+        vor.lambdas[j] = std::exp(-(vor.points[j] - C).norm2()/0.02);
+        sum += vor.lambdas[j];
+    }
+    for (int j = 0; j < N; j++) vor.lambdas[j] /= sum; // have to sum to 1
+
+    // vor.compute();
 
     ot.diagram = vor;
     ot.optimize();
     
-    save_svg(ot.diagram.cells, "voronoi.svg");
+    save_svg(ot.diagram.cells, "voronoi2.svg");
 
     return 0;
 }
