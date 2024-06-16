@@ -115,12 +115,13 @@ public:
 
     void compute(){
 
+        cells.clear();
+
         Polygon square;
         square.vertices.push_back(Vector(0,0,0));
         square.vertices.push_back(Vector(1,0,0));
         square.vertices.push_back(Vector(1,1,0));
         square.vertices.push_back(Vector(0,1,0));
-
         cells.resize(points.size());
 
         for (int i =0; i < points.size(); i++){
@@ -252,11 +253,12 @@ public:
     ){
         SemiDiscreteOT* ot = reinterpret_cast<SemiDiscreteOT*>(instance);
         lbfgsfloatval_t fx = 0.0;
-        std::vector<double> weights_to_use = std::vector<double>(x, x + n);
         
+        std::vector<double> weights_to_use = std::vector<double>(x, x + n); 
         auto points_to_use = ot->diagram.points;
         auto lambdas_to_use = ot->diagram.lambdas;
         auto cells_to_use = compute(points_to_use, weights_to_use);
+        // std::cout << cells_to_use.size() << std::endl;
 
         for (int i = 0; i < points_to_use.size(); i++) {
             Vector y_i = points_to_use[i];
@@ -298,16 +300,15 @@ public:
         diagram.lambdas.resize(N);
         for (int i = 0; i < N; i++){
             diagram.weights[i] = 0.8; // initialize weights to a constant value
-            diagram.lambdas[i] = 0.2;
+            diagram.lambdas[i] = double(1)/double(N);
         }
-        for (auto weight: diagram.weights){
-            std::cout << weight << std::endl;
-        }
-
         double objectivefct = -1;
         std::vector<double> optimized_weights(N, 0.8); // initialization of optimized weights
+
         auto ret = lbfgs(N, &optimized_weights[0], &objectivefct, _evaluate, _progress, this, NULL);
         // auto ret = lbfgs(N, optimized_weights.data(), &objectivefct, _evaluate, _progress, this, NULL);
+        diagram.weights = optimized_weights;
+        diagram.compute();
         printf("L-BFGS optimization terminated with status code = %d\n", ret);
     }
 };
@@ -317,7 +318,7 @@ int main(){
     SemiDiscreteOT ot;
 
     Voronoi vor;
-    int N = 10;
+    int N = 100;
     vor.points.resize(N);
     vor.weights.resize(N);
     vor.lambdas.resize(N);
@@ -327,13 +328,13 @@ int main(){
         vor.weights[i] = rand()/double(RAND_MAX);
         vor.lambdas[i] = rand()/double(RAND_MAX);
     }
-    vor.compute();
 
+    vor.compute();
 
     ot.diagram = vor;
     ot.optimize();
     
-    save_svg(vor.cells, "ot.svg");
+    save_svg(ot.diagram.cells, "voronoi.svg");
 
     return 0;
 }
