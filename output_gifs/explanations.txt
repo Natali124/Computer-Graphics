@@ -1,0 +1,47 @@
+fluid_testing.gif:
+    eps = 0.004
+    number of points = 20
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 100
+    weight initializations: 0.5
+
+testing_init_small.gif:
+    eps = 0.004
+    number of points = 20
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 100
+    weight initializations = 1/Number of points
+
+100_points.gif:
+    eps = 0.004
+    number of points = 100
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 27
+    weight initializations: 0.5
+
+oneaircell.gif:
+    eps = 0.004
+    number of points = 10
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 100
+    weight initializations: 0.5
+
+output.gif:
+    eps = 0.02
+    number of points = 10
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 100
+    weight initializations: 0.5
+
+verysmalleps.gif:
+    eps = 0.0001
+    number of points = 10
+    mass = 200
+    circle polygon vertices = 100
+    number of frames = 100
+    weight initializations: 0.5
