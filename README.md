@@ -1,3 +1,12 @@
+# Project 2
+You can run project using:
+```
+g++ project_2.cpp lbfgs.c -o project
+./project
+```
+Most of the code is here. If you want to run the code for one air bubble, compile project_2_2.cpp and run similarly.
+
+# Project 1
 Project is in project_1.cpp file. It can be run by
 ```g++ project_1.cpp -o project``` and then ```./project``` or using Makefile.
 
