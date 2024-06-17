@@ -367,14 +367,14 @@ public:
     void GallouetMerigot(std::vector<Vector>&velocity, const std::vector<double> &mass){
         // optimize weights of W of cells of all particles
         // To do: optimize weights
-        int N = diagram.points.size() - 1;
-        lbfgsfloatval_t *m_x = lbfgs_malloc(N + 1);
-        for (int i = 0; i < N + 1; i++) {
+        int N = 30;
+        lbfgsfloatval_t *m_x = lbfgs_malloc(100);
+        for (int i = 0; i < 100; i++) {
             m_x[i] = 1.0/double(5); // initialize
         }
         double objectivefct = -1;
 
-        auto ret = lbfgs(N + 1, m_x, &objectivefct, _evaluate, NULL, this, NULL);
+        auto ret = lbfgs(100, m_x, &objectivefct, _evaluate, NULL, this, NULL);
         printf("L-BFGS optimization terminated with status code = %d\n", ret);
 
         lbfgs_free(m_x);
@@ -383,7 +383,7 @@ public:
         double dt = 0.01;
         double eps = 0.004;
         Vector g(0.0, -20, 0.0); // downwards
-        for (int i=0; i<N; i++){
+        for (int i=0; i<30; i++){
             Vector F_spring = (find_centroid(diagram.cells[i]) - diagram.points[i])/(eps*eps);
             Vector F = F_spring + mass[i]*g;
             // printf("F is %f, %f, %f\n", F[0], F[1], F[2]);
@@ -419,25 +419,27 @@ int main(){
     */
     SemiDiscreteOT ot;
     Voronoi vor;
-    int N = 10; // number of fluid cells
-    vor.points.resize(N+1);
-    vor.weights.resize(N + 1);
-    vor.lambdas.resize(N+1);
+    int N = 100; // number of fluid cells
+    vor.points.resize(N);
+    vor.weights.resize(N);
+    vor.lambdas.resize(N);
 
     ot.fluid_volume = 0.3;
 
-    for (int i=0; i<N + 1; i++){
+    for (int i=0; i<N; i++){
         vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
     }
-    for (int i=0; i<N; i++){
+    for (int i=0; i<30; i++){
         vor.lambdas[i] = ot.fluid_volume / double(N);
     }
-    vor.lambdas[N] = 1-ot.fluid_volume;
+    for (int i=30; i<N; i++){
+        vor.lambdas[i] = 1-ot.fluid_volume / 70;
+    }
     ot.diagram = vor;
 
-    std::vector<Vector>velocity(N);
-    std::vector<double>mass(N);
-    for (int i=0; i<N; i++){
+    std::vector<Vector>velocity(30);
+    std::vector<double>mass(30);
+    for (int i=0; i<30; i++){
         velocity[i] = Vector(0.0, 0.0, 0.0);
         mass[i] = 200.0;
     }
@@ -445,7 +447,7 @@ int main(){
     for (int iter = 0; iter < 100; iter++){
         ot.GallouetMerigot(velocity, mass);
         printf("Iter: %d\n", iter);
-        save_frame(ot.diagram.cells, "gif_pngs/oneaircell", iter);
+        save_frame(ot.diagram.cells, "gif_pngs/30aircell", iter);
     }
     return 0;
 }

@@ -10,75 +10,6 @@
 #include "stb_image_write.h"
 #include "save_frame.h"
 
-// class Vector {
-// public:
-// 	explicit Vector(double x = 0, double y = 0, double z = 0) {
-// 		data[0] = x;
-// 		data[1] = y;
-// 		data[2] = z;
-// 	}
-// 	double norm2() const {
-// 		return data[0] * data[0] + data[1] * data[1] + data[2] * data[2];
-// 	}
-// 	double norm() const {
-// 		return sqrt(norm2());
-// 	}
-// 	void normalize() {
-// 		double n = norm();
-// 		data[0] /= n;
-// 		data[1] /= n;
-// 		data[2] /= n;
-// 	}
-// 	double operator[](int i) const { return data[i]; };
-// 	double& operator[](int i) { return data[i]; };
-// 	double data[3];
-// };
-
-// Vector operator+(const Vector& a, const Vector& b) {
-// 	return Vector(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
-// }
-// Vector operator-(const Vector& a, const Vector& b) {
-// 	return Vector(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-// }
-// Vector operator*(const double a, const Vector& b) {
-// 	return Vector(a*b[0], a*b[1], a*b[2]);
-// }
-// Vector operator*(const Vector& a, const double b) {
-// 	return Vector(a[0]*b, a[1]*b, a[2]*b);
-// }
-// Vector operator/(const Vector& a, const double b) {
-// 	return Vector(a[0] / b, a[1] / b, a[2] / b);
-// }
-// double dot(const Vector& a, const Vector& b) {
-// 	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-// }
-// Vector cross(const Vector& a, const Vector& b) {
-// 	return Vector(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]);
-// }
-
-// // if the Polygon class name conflicts with a class in wingdi.h on Windows, use a namespace or change the name
-// class Polygon {  
-// public:
-//     std::vector<Vector> vertices;
-// };
- 
-// // saves a static svg file. The polygon vertices are supposed to be in the range [0..1], and a canvas of size 1000x1000 is created
-// void save_svg(const std::vector<Polygon> &polygons, std::string filename, std::string fillcol = "none") {
-//     FILE* f = fopen(filename.c_str(), "w+"); 
-//     fprintf(f, "<svg xmlns = \"http://www.w3.org/2000/svg\" width = \"1000\" height = \"1000\">\n");
-//     for (int i=0; i<polygons.size(); i++) {
-//         fprintf(f, "<g>\n");
-//         fprintf(f, "<polygon points = \""); 
-//         for (int j = 0; j < polygons[i].vertices.size(); j++) {
-//             fprintf(f, "%3.3f, %3.3f ", (polygons[i].vertices[j][0] * 1000), (1000 - polygons[i].vertices[j][1] * 1000));
-//         }
-//         fprintf(f, "\"\nfill = \"%s\" stroke = \"black\"/>\n", fillcol.c_str());
-//         fprintf(f, "</g>\n");
-//     }
-//     fprintf(f, "</svg>\n");
-//     fclose(f);
-// }
-
 
 class Voronoi{
 public:
@@ -454,34 +385,37 @@ public:
 
 int main(){
     
-    // SemiDiscreteOT ot;
+    SemiDiscreteOT ot;
 
-    // Voronoi vor;
-    // int N = 100;
-    // vor.points.resize(N);
-    // vor.weights.resize(N);
-    // vor.lambdas.resize(N);
+    Voronoi vor;
+    int N = 1000;
+    vor.points.resize(N);
+    vor.weights.resize(N);
+    vor.lambdas.resize(N);
 
-    // for (int i=0; i<N; i++){
-    //     vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
-    //     vor.weights[i] = rand()/double(RAND_MAX);
-    //     vor.lambdas[i] = 1.0/double(N);
-    // }
+    for (int i=0; i<N; i++){
+        vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
+        vor.weights[i] = rand()/double(RAND_MAX);
+        vor.lambdas[i] = 1.0/double(N);
+    }
 
-    // double sum;
-    // Vector C (0.5, 0.5, 0); // center
-    // for (int j = 0; j < N; j++) {
-    //     vor.lambdas[j] = std::exp(-(vor.points[j] - C).norm2()/0.02);
-    //     sum += vor.lambdas[j];
-    // }
-    // for (int j = 0; j < N; j++) vor.lambdas[j] /= sum; // have to sum to 1
+    // vor.compute();
 
-    // // vor.compute();
 
-    // ot.diagram = vor;
-    // ot.optimize();
+    double sum;
+    Vector C (0.5, 0.5, 0); // center
+    for (int j = 0; j < N; j++) {
+        vor.lambdas[j] = std::exp(-(vor.points[j] - C).norm2()/0.02);
+        sum += vor.lambdas[j];
+    }
+    for (int j = 0; j < N; j++) vor.lambdas[j] /= sum; // have to sum to 1
+
+    // vor.compute();
+
+    ot.diagram = vor;
+    ot.optimize();
     
-    // save_svg(ot.diagram.cells, "voronoi2.svg");
+    save_svg(ot.diagram.cells, "voronoi2.svg");
 
     // Voronoi vor;
     // Polygon pol;
@@ -512,29 +446,29 @@ int main(){
     FLUID TEST
     
     */
-    SemiDiscreteOT ot;
-    Voronoi vor;
-    int N = 20; // number of fluid cells
-    vor.points.resize(N);
-    vor.weights.resize(N + 1);
+    // SemiDiscreteOT ot;
+    // Voronoi vor;
+    // int N = 10; // number of fluid cells
+    // vor.points.resize(N);
+    // vor.weights.resize(N + 1);
 
-    for (int i=0; i<N; i++){
-        vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
-    }
-    ot.diagram = vor;
-    ot.fluid_volume = 0.3;
+    // for (int i=0; i<N; i++){
+    //     vor.points[i] = Vector(rand()/double(RAND_MAX), rand()/double(RAND_MAX));
+    // }
+    // ot.diagram = vor;
+    // ot.fluid_volume = 0.2;
 
-    std::vector<Vector>velocity(N);
-    std::vector<double>mass(N);
-    for (int i=0; i<N; i++){
-        velocity[i] = Vector(0.0, 0.0, 0.0);
-        mass[i] = 200.0;
-    }
+    // std::vector<Vector>velocity(N);
+    // std::vector<double>mass(N);
+    // for (int i=0; i<N; i++){
+    //     velocity[i] = Vector(0.0, 0.0, 0.0);
+    //     mass[i] = 200.0;
+    // }
 
-    for (int iter = 0; iter < 100; iter++){
-        ot.GallouetMerigot(velocity, mass);
-        printf("Iter: %d\n", iter);
-        save_frame(ot.diagram.cells, "gif_pngs/debug", iter);
-    }
+    // for (int iter = 0; iter < 100; iter++){
+    //     ot.GallouetMerigot(velocity, mass);
+    //     printf("Iter: %d\n", iter);
+    //     save_frame(ot.diagram.cells, "gif_pngs/goodepstest", iter);
+    // }
     return 0;
 }
