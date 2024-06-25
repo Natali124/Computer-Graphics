@@ -51,3 +51,11 @@ verysmalleps.gif:
     number of frames = 100
     weight initializations: 0.5
     time: 4m47.615s
+
+Voronoi timing:
+    compute 100 - 0m0.011s
+    compute 1000 - 0m0.241s
+    compute 10000 - 0m16.013s
+
+    optimize 100 - 0m1.208s
+    optimize 1000 - 3m16.706s
