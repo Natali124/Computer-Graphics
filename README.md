@@ -1,4 +1,5 @@
 # Project 2
+## Note: timing information, as well as other details, can be found in output_gifs/explanations.txt
 You can run project using:
 ```
 g++ project_2.cpp lbfgs.c -o project
