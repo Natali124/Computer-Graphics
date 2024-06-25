@@ -5,6 +5,7 @@ fluid_testing.gif:
     circle polygon vertices = 100
     number of frames = 100
     weight initializations: 0.5
+    time: 7m34.828s
 
 testing_init_small.gif:
     eps = 0.004
@@ -13,6 +14,7 @@ testing_init_small.gif:
     circle polygon vertices = 100
     number of frames = 100
     weight initializations = 1/Number of points
+    time: 7m32.390s
 
 100_points.gif:
     eps = 0.004
@@ -21,6 +23,7 @@ testing_init_small.gif:
     circle polygon vertices = 100
     number of frames = 27
     weight initializations: 0.5
+    time: 8m20.261s (Note: 27 frames)
 
 oneaircell.gif:
     eps = 0.004
@@ -29,6 +32,7 @@ oneaircell.gif:
     circle polygon vertices = 100
     number of frames = 100
     weight initializations: 0.5
+    time: 1m9.468s
 
 output.gif:
     eps = 0.02
@@ -37,6 +41,7 @@ output.gif:
     circle polygon vertices = 100
     number of frames = 100
     weight initializations: 0.5
+    time: 4m46.302s
 
 verysmalleps.gif:
     eps = 0.0001
@@ -45,3 +50,4 @@ verysmalleps.gif:
     circle polygon vertices = 100
     number of frames = 100
     weight initializations: 0.5
+    time: 4m47.615s
