@@ -6,6 +6,7 @@ g++ project_2.cpp lbfgs.c -o project
 ./project
 ```
 Most of the code is here. If you want to run the code for one air bubble, compile project_2_2.cpp and run similarly.
+Code for the last TD is in tutte.cpp. It is not fully working but displays some result.
 
 # Project 1
 Project is in project_1.cpp file. It can be run by
